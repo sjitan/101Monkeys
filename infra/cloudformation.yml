@@ -1,0 +1,462 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 101Monkeys Pacer Protocol MVP - Baseline-Normalized, Multimodal, Safe
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: '101MonkeysPacer'
+  ApiDomainName:
+    Type: String
+    Default: 'api.101monkeys.com'
+  CodeS3Bucket:
+    Type: String
+    Description: The S3 bucket containing the Lambda code.
+
+Resources:
+  # --- DynamoDB Tables (6 Tables, On-Demand, PITR) ---
+  YogaProtocolLibraryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: YogaProtocolLibrary
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ProtocolID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ProtocolID
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  ANSLongitudinalDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ANSLongitudinalData
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: UserID
+          AttributeType: S
+        - AttributeName: Timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: UserID
+          KeyType: HASH
+        - AttributeName: Timestamp
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  UserProfilesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UserProfiles
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: UserID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: UserID
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  AnonymizedTrainingDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AnonymizedTrainingData
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: AnonID
+          AttributeType: S
+        - AttributeName: TS
+          AttributeType: S
+      KeySchema:
+        - AttributeName: AnonID
+          KeyType: HASH
+        - AttributeName: TS
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  PacerPolicyConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: PacerPolicyConfig
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PolicyID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PolicyID
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  CFSBaselineSeedTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CFSBaselineSeed
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: BaselineID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: BaselineID
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # --- KMS & Secrets Manager ---
+  PhiSaltKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting the pseudonymizer salt
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - kms:*
+            Resource: '*'
+
+  PhiSaltKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/phi-salt
+      TargetKeyId: !Ref PhiSaltKmsKey
+
+  PseudonymizerSaltSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: phi/pseudonymizer/salt
+      Description: Salt for the PHI pseudonymizer function
+      KmsKeyId: !Ref PhiSaltKmsKey
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: 'salt'
+        PasswordLength: 48
+        ExcludeCharacters: '"@/\'
+
+  # --- Cognito User Pool ---
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${ProjectName}-UserPool
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      MfaConfiguration: OFF
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub ${ProjectName}-WebAppClient
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - implicit
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - phone
+        - email
+        - openid
+        - profile
+      CallbackURLs:
+        - http://localhost:3000
+        - https://101monkeys.com
+      LogoutURLs:
+        - http://localhost:3000
+        - https://101monkeys.com
+      LambdaConfig:
+        PostConfirmation: !GetAtt OnboardingFunction.Arn
+
+  OnboardingFunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt OnboardingFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  # --- HTTP API Gateway ---
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${ProjectName}-HttpApi
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - https://101monkeys.com
+          - https://www.101monkeys.com
+          - http://localhost:3000
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - x-amz-date
+          - x-api-key
+          - x-amz-security-token
+        MaxAge: 300
+
+  HttpApiJwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      Name: CognitoJwtAuthorizer
+      IdentitySource:
+        - $request.header.Authorization
+      JwtConfiguration:
+        Audience:
+          - !Ref CognitoUserPoolClient
+        Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}
+
+  HttpApiDefaultStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+  # --- IAM Roles & Policies ---
+  # This is a general role for most lambdas. The pseudonymizer will have a more specific one.
+  GenericLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-GenericLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBReadWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt YogaProtocolLibraryTable.Arn
+                  - !GetAtt ANSLongitudinalDataTable.Arn
+                  - !GetAtt UserProfilesTable.Arn
+                  - !GetAtt PacerPolicyConfigTable.Arn
+                  - !GetAtt CFSBaselineSeedTable.Arn
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt PhiPseudonymizerFunction.Arn
+
+  PseudonymizerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-PseudonymizerLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PseudonymizerPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref PseudonymizerSaltSecret
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !GetAtt PhiSaltKmsKey.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt AnonymizedTrainingDataTable.Arn
+
+  # --- Lambda Layer for Numpy ---
+  NumpyLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Sub ${ProjectName}-NumpyLayer
+      Content:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: numpy_layer.zip
+      CompatibleRuntimes:
+        - python3.11
+
+  # --- Lambda Functions ---
+  HealthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-HealthFunction
+      Handler: handler.handler
+      Runtime: python3.11
+      Role: !GetAtt GenericLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: 'health.zip'
+
+  PacerDecisionEngineFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-PacerDecisionEngineFunction
+      Handler: pacer_decision_engine.handler
+      Runtime: python3.11
+      Role: !GetAtt GenericLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: 'pacer.zip'
+      Layers:
+        - !Ref NumpyLambdaLayer
+      Environment:
+        Variables:
+          ANS_TABLE: !Ref ANSLongitudinalDataTable
+          POLICY_TABLE: !Ref PacerPolicyConfigTable
+          SEED_TABLE: !Ref CFSBaselineSeedTable
+          PROTO_TABLE: !Ref YogaProtocolLibraryTable
+          PSEUDONYMIZER_FN_NAME: !Ref PhiPseudonymizerFunction
+
+  LogPostProtocolDataFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-LogPostProtocolDataFunction
+      Handler: log_post_protocol_data.handler
+      Runtime: python3.11
+      Role: !GetAtt GenericLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: 'pacer.zip'
+      Environment:
+        Variables:
+          ANS_TABLE: !Ref ANSLongitudinalDataTable
+
+  PhiPseudonymizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-PhiPseudonymizerFunction
+      Handler: phi_pseudonymizer.handler
+      Runtime: python3.11
+      Role: !GetAtt PseudonymizerLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: 'data.zip'
+      Environment:
+        Variables:
+          ANONYMIZED_TABLE: !Ref AnonymizedTrainingDataTable
+
+  OnboardingFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        FunctionName: !Sub ${ProjectName}-OnboardingFunction
+        Handler: user_onboarding.handler
+        Runtime: python3.11
+        Role: !GetAtt GenericLambdaRole.Arn
+        Code:
+          S3Bucket: !Ref CodeS3Bucket
+          S3Key: 'onboarding.zip'
+        Environment:
+          Variables:
+            USER_PROFILES_TABLE: !Ref UserProfilesTable
+
+  StripeWebhookFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        FunctionName: !Sub ${ProjectName}-StripeWebhookFunction
+        Handler: stripe_webhook_handler.handler
+        Runtime: python3.11
+        Role: !GetAtt GenericLambdaRole.Arn
+        Code:
+          S3Bucket: !Ref CodeS3Bucket
+          S3Key: 'security.zip'
+
+  # --- API Gateway Integrations ---
+  HealthIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt HealthFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  PacerDataIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt PacerDecisionEngineFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  PacerLogIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LogPostProtocolDataFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  # --- API Gateway Routes ---
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'GET /'
+      Target: !Join ['/', ['integrations', !Ref HealthIntegration]]
+
+  PacerDataRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /pacer/data'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiJwtAuthorizer
+      Target: !Join ['/', ['integrations', !Ref PacerDataIntegration]]
+
+  PacerLogRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: 'POST /pacer/log'
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpApiJwtAuthorizer
+      Target: !Join ['/', ['integrations', !Ref PacerLogIntegration]]
