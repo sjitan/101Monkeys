@@ -151,7 +151,7 @@ aws apigatewayv2 update-api --region "$REGION" --api-id "$API_ID" \
 # Lambda env for decision engine
 aws lambda update-function-configuration --region "$REGION" \
   --function-name PacerDecisionEngine \
-  --environment "Variables={ANS_TABLE=ANSLongitudinalData,PROTO_TABLE=YogaProtocolLibrary,PSEUDONYMIZER_FN=phi_pseudonymizer,CORS_ORIGIN=https://101monkeys.com}"
+  --environment "Variables={ANS_TABLE=ANSLongitudinalData,PROTO_TABLE=YogaProtocolLibrary,PSEUDONYMIZER_FN=$PSEU_ARN,CORS_ORIGIN=https://101monkeys.com}"
 
 # Seed protocols
 aws dynamodb put-item --region $REGION --table-name YogaProtocolLibrary --item '{"ProtocolID":{"S":"BREATH_1"},"Name":{"S":"Box Breathing"},"VideoURL":{"S":"https://cdn.101monkeys.com/protocols/box-breathing.mp4"}}'

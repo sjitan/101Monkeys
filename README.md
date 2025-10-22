@@ -44,7 +44,7 @@ Closed-loop Edge–Cloud system that measures autonomic dysregulation (rPPG → 
 ## API (contract summary)
 
 - `POST /pacer/data`
-  Body: `{ userId: string, rmssd: number, timestamp?: ISO8601, hr?: number, pemScore?: number }`
+  Body: `{ userId: string, rmssd: number, timestamp?: ISO8601, pupilDiameterPV?: number, gazeStabilityScore?: number, pemScore?: number }`
   Returns: `{ protocolId: string, cueUrl: uri }`
   Headers: `Authorization: Bearer <JWT>`, `x-idempotency-key: <uuid>` (recommended)
 

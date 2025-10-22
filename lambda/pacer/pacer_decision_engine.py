@@ -36,9 +36,19 @@ def handler(event, context):
         if not isinstance(user, str) or user == "" or not isinstance(rmssd, (int, float)):
             return _json({"error":"invalid_request","traceId":trace_id}, 400)
 
-        # Simple threshold policy
         rmssd_val = float(rmssd)
-        proto = 'BREATH_1' if rmssd_val < 25 else 'RELAX_1'
+        pupil_pv = body.get('pupilDiameterPV')
+
+        # Tier 2 Decision Logic: Use pupillometry to refine protocol selection
+        if pupil_pv is not None and float(pupil_pv) > 0.4:
+            # High pupillary variation suggests cognitive load or stress; prioritize calming breathwork
+            proto = 'BREATH_1'
+        elif rmssd_val < 25:
+            # Low HRV also indicates stress
+            proto = 'BREATH_1'
+        else:
+            # Default to relaxation protocol
+            proto = 'RELAX_1'
 
         # Fetch cue
         res = T_PROTO.get_item(Key={'ProtocolID': proto})
@@ -47,21 +57,42 @@ def handler(event, context):
         # Idempotency support
         idem = (event.get('headers') or {}).get('x-idempotency-key') or trace_id
 
-        # Log pre-intervention
-        T_LOG.put_item(Item={
+        # Tier 2 Multimodal Sensing Data
+        pupil_pv = body.get('pupilDiameterPV') # Pupillometry variation
+        gaze_score = body.get('gazeStabilityScore') # Gaze stability
+
+        # Log pre-intervention, including optional multimodal data
+        log_item = {
             "UserID": user,
             "Timestamp": ts,
             "RMSSD": Decimal(str(rmssd_val)),
             "ProtocolIDApplied": proto,
             "idem": idem
-        })
+        }
+        if pupil_pv is not None:
+            log_item['PupilDiameterPV'] = Decimal(str(pupil_pv))
+        if gaze_score is not None:
+            log_item['GazeStabilityScore'] = Decimal(str(gaze_score))
 
-        # Async pseudonymizer (fire-and-forget)
+        T_LOG.put_item(Item=log_item)
+
+        # Async pseudonymizer (fire-and-forget), including optional multimodal data
         try:
+            payload = {
+                "userId": user,
+                "rmssd": rmssd_val,
+                "protocolId": proto,
+                "timestamp": ts,
+            }
+            if pupil_pv is not None:
+                payload['pupilDiameterPV'] = pupil_pv
+            if gaze_score is not None:
+                payload['gazeStabilityScore'] = gaze_score
+
             lambda_client.invoke(
                 FunctionName=PSEU_FN,
                 InvocationType='Event',
-                Payload=json.dumps({"userId": user, "rmssd": rmssd_val, "protocolId": proto, "timestamp": ts}).encode('utf-8')
+                Payload=json.dumps(payload).encode('utf-8')
             )
         except Exception as e:
             log.warning(json.dumps({"service":"pacer","fn":"decision_engine","traceId":trace_id,"pseudonymizer_invoke":"failed","err":str(e)}))
