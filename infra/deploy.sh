@@ -50,6 +50,10 @@ aws kms create-alias --region $REGION --alias-name alias/phi-salt --target-key-i
 SALT=$(openssl rand -base64 48)
 aws secretsmanager create-secret --region $REGION --name phi/pseudonymizer/salt --kms-key-id "$KMS_KEY" --secret-string "$SALT" >/dev/null
 
+# Cognito User Pool
+USER_POOL_ID=$(aws cognito-idp create-user-pool --pool-name pacer-pool --region $REGION --query UserPool.Id --output text)
+USER_POOL_CLIENT_ID=$(aws cognito-idp create-user-pool-client --user-pool-id $USER_POOL_ID --client-name pacer-client --no-generate-secret --region $REGION --query UserPoolClient.ClientId --output text)
+
 # Role + Policy
 cat > trust.json <<EOF
 {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}
@@ -118,6 +122,36 @@ done
 
 aws apigatewayv2 create-stage --region $REGION --api-id $API_ID --stage-name prod --auto-deploy
 aws apigatewayv2 create-api-mapping --region $REGION --domain-name $DOMAIN --api-id $API_ID --stage prod
+
+# --- CORS & Authorizer (HTTP API) ---
+AUTH_ID=$(aws apigatewayv2 create-authorizer --region "$REGION" \
+  --api-id "$API_ID" --authorizer-type JWT --name "cognito-jwt" \
+  --identity-source '$request.header.Authorization' \
+  --jwt-configuration "{\"Issuer\":\"https://cognito-idp.$REGION.amazonaws.com/$USER_POOL_ID\",\"Audience\":[\"$USER_POOL_CLIENT_ID\"]}" \
+  --query AuthorizerId --output text)
+
+# Update routes to require auth
+for RK in "POST /pacer/data" "POST /pacer/log"; do
+  RID=$(aws apigatewayv2 get-routes --region "$REGION" --api-id "$API_ID" \
+    --query "Items[?RouteKey=='$RK'].RouteId" --output text)
+  aws apigatewayv2 update-route --region "$REGION" --api-id "$API_ID" --route-id "$RID" \
+    --authorization-type JWT --authorizer-id "$AUTH_ID"
+done
+
+# CORS
+aws apigatewayv2 update-api --region "$REGION" --api-id "$API_ID" \
+  --cors-configuration '{
+    "AllowHeaders":["Content-Type","Authorization","x-idempotency-key"],
+    "AllowMethods":["POST","OPTIONS"],
+    "AllowOrigins":["https://101monkeys.com","https://www.101monkeys.com","https://*.101monkeys.com","*"],
+    "ExposeHeaders":["Content-Type","x-request-id"],
+    "MaxAge":300
+  }'
+
+# Lambda env for decision engine
+aws lambda update-function-configuration --region "$REGION" \
+  --function-name PacerDecisionEngine \
+  --environment "Variables={ANS_TABLE=ANSLongitudinalData,PROTO_TABLE=YogaProtocolLibrary,PSEUDONYMIZER_FN=phi_pseudonymizer,CORS_ORIGIN=https://101monkeys.com}"
 
 # Seed protocols
 aws dynamodb put-item --region $REGION --table-name YogaProtocolLibrary --item '{"ProtocolID":{"S":"BREATH_1"},"Name":{"S":"Box Breathing"},"VideoURL":{"S":"https://cdn.101monkeys.com/protocols/box-breathing.mp4"}}'

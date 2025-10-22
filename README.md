@@ -1,63 +1,115 @@
 # 101Monkeys — Adaptive Coherence Protocol (MVP)
 
-### Vision
-Serverless Edge–Cloud feedback loop that measures ANS dysregulation (HRV via rPPG), delivers targeted behavioral nudges, and logs physiological recovery.
+Closed-loop Edge–Cloud system that measures autonomic dysregulation (rPPG → HRV), selects and delivers a targeted behavioral nudge, and logs the post-intervention response. This branch includes **CORS**, **/pacer/log integration**, **async pseudonymizer**, **request validation**, and a public **Saga of Context** page.
 
-### Architecture Summary
-| Component | AWS Service | Function |
-|------------|-------------|-----------|
-| API Gateway | Custom domain (`api.101monkeys.com`) | Routes `/pacer/data` and `/pacer/log` |
-| Lambda | PacerDecisionEngine / LogPostProtocolData / phi_pseudonymizer | Decision, compliance, and pseudonymization |
-| DynamoDB | 4 Tables | PITR + TTL enabled |
-| Cognito | JWT auth | Secures API access |
-| KMS + Secrets Manager | Salt + key decrypt boundary | HIPAA compliance |
-| Amplify / CloudFront | Frontend hosting | `/app/` + `config/config.json` |
-| CloudWatch | Error + 5XX alarms | Monitoring baseline |
+## Architecture
 
-### DynamoDB Tables
-- `YogaProtocolLibrary` — protocol definitions (ID, Name, VideoURL)
-- `ANSLongitudinalData` — user HRV logs (PK UserID, SK Timestamp)
-- `UserProfiles` — subscriber info
-- `AnonymizedTrainingData` — pseudonymized RL dataset
+| Component   | AWS Service                       | Function |
+|-------------|-----------------------------------|----------|
+| API         | API Gateway (HTTP) + custom domain `api.101monkeys.com` | Routes `/pacer/data`, `/pacer/log`, CORS, Cognito JWT authorizer |
+| Compute     | Lambda                            | Decision engine, post-session logger, pseudonymizer, onboarding, Stripe webhook |
+| Data        | DynamoDB                          | `YogaProtocolLibrary`, `ANSLongitudinalData`, `UserProfiles`, `AnonymizedTrainingData` (PITR + TTL) |
+| Identity    | Cognito                           | JWT auth for API |
+| Secrets     | KMS + Secrets Manager             | `phi/pseudonymizer/salt` guarded by CMK (`alias/phi-salt`) |
+| Hosting     | Amplify (S3/CloudFront)           | Static frontend (`/app`) + `config/config.json` |
+| Monitoring  | CloudWatch                        | `LambdaErrors > 0`, `APIGateway5XX > 0` |
+
+### DynamoDB tables
+
+- **YogaProtocolLibrary** — `PK: ProtocolID (S)`; `Name (S)`, `VideoURL (S)`
+- **ANSLongitudinalData** — `PK: UserID (S)`, `SK: Timestamp (S)`; `RMSSD`, `RMSSD_Post_Protocol`, `ProtocolIDApplied`, `PEMSeverityScore`; **TTL** `ttl`
+- **UserProfiles** — `PK: UserID (S)`; `Email`, `is_active_subscriber`, `StripeCustomerID`
+- **AnonymizedTrainingData** — `PK: AnonID (S)`, `SK: Timestamp (S)`; `RMSSD`, `ProtocolIDApplied`, `PEMSeverityScore`; **TTL** `ttl`
 
 ### Lambdas
-| Function | Purpose |
-|-----------|----------|
-| `user_onboarding.py` | Runs post-Cognito signup; writes `UserID` and membership flag. |
-| `pacer_decision_engine.py` | Reads HRV; selects nudge; logs; asynchronously invokes pseudonymizer. |
-| `log_post_protocol_data.py` | Updates logs after user session; appends PEM data. |
-| `phi_pseudonymizer.py` | Hashes user ID → anon key; writes anonymized data. |
-| `stripe_webhook_handler.py` | Verifies payments; updates active flag. |
 
-### Frontend Contracts
-- `/app/js/cv_sensor.js` — captures HRV → `POST /pacer/data`
-- `/app/app.html` — displays adaptive cue + collects feedback
-- `/app/js/cognito_auth.js` — manages JWTs
-- `/config/config.json` — `{ "API_BASE_URL": "https://api.101monkeys.com" }`
+| Function                    | Purpose |
+|----------------------------|---------|
+| `onboarding/user_onboarding.py` | Post-signup write of `UserID`, membership flag |
+| `pacer/pacer_decision_engine.py` | Read HRV, pick protocol, log to `ANSLongitudinalData`, **async invoke** `phi_pseudonymizer` |
+| `pacer/log_post_protocol_data.py` | Update post-session (`RMSSD_Post_Protocol`, optional `PEMSeverityScore`) |
+| `data/phi_pseudonymizer.py` | Derive `AnonID` from `userId` with KMS-protected salt; write to `AnonymizedTrainingData` |
+| `security/stripe_webhook_handler.py` | Verify signature, set `is_active_subscriber=true` |
 
-### Deployment
+### Frontend contracts
+
+- `/app/js/cv_sensor.js` → captures HRV (rPPG) → `POST /pacer/data`
+- `/app/app.html` → displays returned `cueUrl`, posts session to `/pacer/log`
+- `/app/js/cognito_auth.js` → obtains & injects JWT
+- `/config/config.json` → `{ "API_BASE_URL": "https://api.101monkeys.com" }`
+- `/app/context.html` → public-facing **Saga of Context**
+
+---
+
+## API (contract summary)
+
+- `POST /pacer/data`
+  Body: `{ userId: string, rmssd: number, timestamp?: ISO8601, hr?: number, pemScore?: number }`
+  Returns: `{ protocolId: string, cueUrl: uri }`
+  Headers: `Authorization: Bearer <JWT>`, `x-idempotency-key: <uuid>` (recommended)
+
+- `POST /pacer/log`
+  Body: `{ userId: string, protocolId: string, rmssdPost: number, timestamp: ISO8601, pemScore?: number }`
+  Returns: `{ ok: true }`
+  Headers: `Authorization: Bearer <JWT>`, `x-idempotency-key: <uuid>` (recommended)
+
+**CORS**: enabled for `https://101monkeys.com`, `https://www.101monkeys.com`, and `https://*.101monkeys.com` (and `*` in dev).
+
+---
+
+## Deploy
+
 ```bash
 bash infra/deploy.sh
 ```
 
-### Monitoring
+What deploy.sh does in addition to existing stack:
+	•	wires Cognito JWT authorizer to both routes,
+	•	enables CORS,
+	•	sets CloudFront cache hints (immutable static assets),
+	•	ensures both routes are mapped and async invoke perms are set,
+	•	outputs smoke-test curl examples.
 
-- `LambdaErrors > 0`
-- `APIGateway5XX > 0`
+⸻
 
-### Compliance
+Monitoring
+	•	CloudWatch Alarms:
+	•	LambdaErrors > 0
+	•	APIGateway5XX > 0
+	•	Enable structured JSON logs (service, fn, userId, traceId, etc.) in Lambda.
 
-- No PHI in logs
-- KMS key limited to pseudonymizer Lambda
-- IAM: least privilege
+⸻
 
----
+Compliance guardrails
+	•	No PHI in logs (strict JSON fields, no raw email/phone in CloudWatch).
+	•	KMS decrypt allowed only to phi_pseudonymizer.
+	•	Cognito-gated endpoints (JWT required).
+	•	x-idempotency-key support to reduce duplicate writes/retries.
 
-## 🧮 Fixes Applied (from Gemini + internal audit)
+⸻
 
-| Issue | Resolution |
-|-------|-------------|
-| Missing `LogPostProtocolData` integration | Added Lambda creation + API mapping to `/pacer/log`. |
-| Pseudonymizer not invoked from decision engine | Updated handler to asynchronously invoke pseudonymizer via AWS Lambda invoke API. |
-| Frontend config unclear | Explicitly added `/config/config.json` hosted in Amplify/S3. |
-| CORS | Enabled for `https://101monkeys.com` + `www` + `*` for testing. |
+Context & Theory (for Jules & stakeholders)
+	•	Read the full “Saga of Context” here: /context/saga_of_context.md
+and public page: /app/context.html
+
+It covers:
+	•	scientific premise (ANS dysregulation across CFS/ME, T2D),
+	•	closed-loop control (measure → decide → actuate → measure),
+	•	digital biomarkers (rPPG HRV, respiration), adaptive therapeutics,
+	•	Emergent Coherence (Joe Dispenza): positioned as hypothesis/heuristic about group-level entrainment and intention-mediated coherence; not clinical guidance; used to motivate research questions and design ethically safe, measurable experiments (e.g., blinded rPPG HRV deltas around group sessions), separate from MVP claims.
+
+⸻
+
+Quick smoke tests
+
+# data (expect protocol)
+curl -X POST https://api.101monkeys.com/pacer/data \
+  -H "Authorization: Bearer <JWT>" -H "Content-Type: application/json" \
+  -H "x-idempotency-key: $(uuidgen)" \
+  -d '{"userId":"U1","rmssd":22,"timestamp":"2025-10-21T23:20:00Z"}'
+
+# log (expect ok:true)
+curl -X POST https://api.101monkeys.com/pacer/log \
+  -H "Authorization: Bearer <JWT>" -H "Content-Type: application/json" \
+  -H "x-idempotency-key: $(uuidgen)" \
+  -d '{"userId":"U1","protocolId":"BREATH_1","rmssdPost":31,"timestamp":"2025-10-21T23:22:00Z","pemScore":0.2}'
