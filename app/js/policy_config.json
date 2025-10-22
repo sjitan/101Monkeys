@@ -1,0 +1,28 @@
+{
+  "configId": "GLOBAL_DEFAULT",
+  "weights": {
+    "w_rmssd": 1.0,
+    "w_pv": 1.0,
+    "w_respvar": 1.0,
+    "w_resprate": 0.5,
+    "w_fatigue": 1.0
+  },
+  "gates": {
+    "hr_delta_bpm_max": 15,
+    "pv_complexity_mad_k": 2.0,
+    "rmssd_trend_drop_pct": -20,
+    "gate_hr_breach_secs": 30
+  },
+  "breath": {
+    "rf_bpm_min": 4.5,
+    "rf_bpm_max": 6.5,
+    "rf_step": 0.25,
+    "ie_candidates": ["1:1","1:1.5","1:2"],
+    "max_pause_sec": 0.4
+  },
+  "quality": {
+    "ppg_sqm_min": 0.7,
+    "pupil_sqm_min": 0.7,
+    "min_cam_fps": 15
+  }
+}
