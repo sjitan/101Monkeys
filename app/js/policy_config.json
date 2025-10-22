@@ -1,28 +1,42 @@
 {
-  "configId": "GLOBAL_DEFAULT",
-  "weights": {
+  "API_BASE_URL": "https://api.101monkeys.com",
+  "COGNITO_USER_POOL_ID": "xxx",
+  "COGNITO_CLIENT_ID": "xxx",
+  "COGNITO_REGION": "us-east-2",
+
+  "EDGE_ONLY_MODE": true,
+  "SYNC_ANALYTICS_ENABLED": false,
+
+  "POLICY_WEIGHTS": {
     "w_rmssd": 1.0,
     "w_pv": 1.0,
     "w_respvar": 1.0,
-    "w_resprate": 0.5,
+    "w_resprate_error": 0.5,
     "w_fatigue": 1.0
   },
-  "gates": {
-    "hr_delta_bpm_max": 15,
-    "pv_complexity_mad_k": 2.0,
-    "rmssd_trend_drop_pct": -20,
-    "gate_hr_breach_secs": 30
+
+  "SAFETY_THRESHOLDS": {
+    "HR_GATE_BPM_OVER_RHR": 15,
+    "PV_COMPLEXITY_GATE_MAD": 2.0,
+    "RMSSD_TREND_DROP_PCT": 20,
+    "PEM_MAX_SCORE": 2
   },
-  "breath": {
-    "rf_bpm_min": 4.5,
-    "rf_bpm_max": 6.5,
-    "rf_step": 0.25,
-    "ie_candidates": ["1:1","1:1.5","1:2"],
-    "max_pause_sec": 0.4
+
+  "BREATHING": {
+    "RF_SWEEP_START_BPM": 6.5,
+    "RF_SWEEP_STOP_BPM": 4.5,
+    "RF_SWEEP_STEP_BPM": 0.25,
+    "IE_RATIO_CANDIDATES": ["1:1", "1:1.5", "1:2"],
+    "FORBID_RETENTION": true
   },
-  "quality": {
-    "ppg_sqm_min": 0.7,
-    "pupil_sqm_min": 0.7,
-    "min_cam_fps": 15
+
+  "BASELINE_FALLBACKS": {
+    "RMSSD_MEDIAN_MS": 20.0,
+    "RMSSD_MAD_MS": 5.0,
+    "PV_MEDIAN": 0.35,
+    "PV_MAD": 0.10,
+    "RESPVAR_MEDIAN": 0.05,
+    "RESPVAR_MAD": 0.02,
+    "HR_RHR_MEDIAN": 60.0
   }
 }

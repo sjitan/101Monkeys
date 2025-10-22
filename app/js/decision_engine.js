@@ -1,169 +1,91 @@
-/**
- * @file decision_engine.js
- * @description Implements the core on-device logic for the Pacer Protocol.
- * This engine calculates the composite utility score (S), applies safety gates,
- * and selects the optimal, lowest-effort protocol for the user in real-time.
- * It operates entirely offline, using data from the baseline_store.
- */
+import { loadBaselines } from './baseline_store.js';
+import config from './policy_config.json';
+// Assume pose library is loaded from a static JSON file or imported
 
-import { getCurrentBaseline } from './baseline_store.js';
-import policy from './policy_config.json';
-import protocolLibrary from './yoga_protocol_library.json';
+const W = config.POLICY_WEIGHTS;
+const THRESHOLDS = config.SAFETY_THRESHOLDS;
+const FALLBACKS = config.BASELINE_FALLBACKS;
 
-/**
- * Calculates a z-score for a given value against a baseline using robust statistics.
- * @param {number} value - The current physiological metric value.
- * @param {object} baseline - The baseline object, e.g., { median: 25.0, mad: 5.0 }.
- * @returns {number|null} The calculated z-score, or null if baseline is invalid.
- */
-function calculateZScore(value, baseline) {
-    if (!baseline || typeof baseline.median !== 'number' || typeof baseline.mad !== 'number' || baseline.mad === 0) {
-        return 0; // Return a neutral score if baseline is incomplete or MAD is zero
-    }
-    return (value - baseline.median) / baseline.mad;
-}
+// Helper to compute Z-score based on local baselines
+const computeZScore = (value, metric, baselines) => {
+    const median = baselines[`${metric}_MEDIAN`] || FALLBACKS[`${metric}_MEDIAN`];
+    const mad = baselines[`${metric}_MAD`] || FALLBACKS[`${metric}_MAD`];
+    // Avoid division by zero, return 0 if MAD is too small/zero (i.e., stable signal = no change)
+    if (mad < 0.001) return 0;
+    return (value - median) / mad;
+};
 
-/**
- * The main decision function. It takes the latest sensor data and user inputs,
- * evaluates them against the user's baselines and the policy config, and returns
- * the best protocol choice.
- *
- * @param {object} sensorData - The latest package of sensor data.
- *   Example: {
- *     rmssd: 22.3, rmssd_sqm: 0.86,
- *     respRate: 6.1, respVar: 0.08,
- *     pupilPV: 0.12, pupil_sqm: 0.72,
- *     fatigue: 5, pemScore: 1, rhr: 62, hr: 68
- *   }
- * @returns {Promise<object>} A promise that resolves with the decision object.
- *   Example: {
- *     protocolId: "SEATED_UTTANASANA_SOFT",
- *     rationale: { S: 1.92, ... },
- *     ...
- *   }
- */
-async function selectProtocol(sensorData) {
-    const baseline = await getCurrentBaseline();
-    // A seed baseline should be used if no baseline is present
-    const userBaseline = baseline || getSeedBaseline();
+// 1. The Real-Time Safety Gate Loop (sub-minute)
+export const checkSafetyGates = (currentMetrics, baselines) => {
+    const zPV = computeZScore(currentMetrics.pupilPV, 'PV', baselines);
+    const rmssdZ = computeZScore(currentMetrics.rmssd, 'RMSSD', baselines);
+    const hrDelta = currentMetrics.hr - (baselines.HR_RHR_MEDIAN || FALLBACKS.HR_RHR_MEDIAN);
 
-    // 1. APPLY SAFETY GATES (Fast loop concerns handled here before scoring)
-    // HR Gate
-    if (sensorData.hr > (sensorData.rhr + policy.gates.hr_delta_bpm_max)) {
-        console.warn('SAFETY GATE: HR breach detected.');
-        return getRestorativeProtocol('hr_gate_breach');
-    }
-    // PEM Score Gate
-    if (sensorData.pemScore >= 2) {
-        console.warn('SAFETY GATE: High PEM score reported.');
-        return getRestorativeProtocol('pem_score_high');
-    }
-    // RMSSD Trend Gate (Requires historical baseline data not shown in this stub)
-    // This would involve comparing the 7-day median to a longer-term (e.g., 28-day) median.
-    // For now, we assume this check passes.
-
-
-    // 2. FILTER PROTOCOL LIBRARY
-    // Filter by effort based on subjective fatigue and objective gates
-    let maxEffort = 3;
-    if (sensorData.fatigue > 7) maxEffort = 1;
-    if (sensorData.fatigue > 5) maxEffort = 2;
-    // Further cap effort if PEM gate is tripped
-    // if(isPemGateTripped) maxEffort = 1;
-
-    const candidateProtocols = protocolLibrary.filter(p => p.effort <= maxEffort);
-
-
-    // 3. CALCULATE S-SCORE FOR EACH CANDIDATE
-    const scoredProtocols = candidateProtocols.map(protocol => {
-        const effectiveWeights = { ...policy.weights };
-
-        // Handle missing signals based on SQM
-        if (!sensorData.rmssd || sensorData.rmssd_sqm < policy.quality.ppg_sqm_min) {
-            effectiveWeights.w_rmssd = 0;
-        }
-        if (!sensorData.pupilPV || sensorData.pupil_sqm < policy.quality.pupil_sqm_min) {
-            effectiveWeights.w_pv = 0;
-        }
-        // Could re-normalize weights here if desired
-
-        // Calculate z-score terms
-        const z_rmssdDelta_expected = calculateZScore(protocol.rmssdDeltaSeed, { median: 0, mad: 1 }); // Simplified for stub
-        const z_pupilPV = calculateZScore(sensorData.pupilPV, userBaseline.pupilPV);
-        const z_respVar = calculateZScore(sensorData.respVar, userBaseline.respVar);
-        const z_resprate_dev = Math.abs(sensorData.respRate - (protocol.breathDefault.rf_bpm || policy.breath.rf_bpm_max));
-        const z_fatigueAdj = calculateZScore(sensorData.fatigue, { median: 3, mad: 2 }); // Example baseline for fatigue
-
-        // Calculate final S-score
-        const S = (effectiveWeights.w_rmssd * z_rmssdDelta_expected) -
-                  (effectiveWeights.w_pv * z_pupilPV) -
-                  (effectiveWeights.w_respvar * z_respVar) -
-                  (effectiveWeights.w_resprate * z_resprate_dev) -
-                  (effectiveWeights.w_fatigue * z_fatigueAdj);
-
-        return {
-            ...protocol,
-            S,
-            rationale: {
-                S,
-                terms: { z_rmssdDelta_expected, z_pupilPV, z_respVar, z_resprate_dev, z_fatigueAdj },
-                weights_used: effectiveWeights
-            }
-        };
-    });
-
-
-    // 4. APPLY TIE-BREAKER RULES AND SELECT BEST PROTOCOL
-    const validProtocols = scoredProtocols.filter(p => p.S > 0);
-
-    if (validProtocols.length === 0) {
-        console.warn('No protocols with positive S-score. Defaulting to restorative.');
-        return getRestorativeProtocol('no_positive_s_score');
-    }
-
-    validProtocols.sort((a, b) => {
-        // 1. Highest S
-        if (a.S !== b.S) return b.S - a.S;
-        // 2. Lower Effort
-        if (a.effort !== b.effort) return a.effort - b.effort;
-        // 3. Deterministic lexical order
-        return a.protocolId.localeCompare(b.protocolId);
-    });
-
-    return validProtocols[0];
-}
-
-/**
- * Returns a default restorative protocol when a safety gate is breached or no suitable protocol is found.
- * @param {string} reason - The reason for returning a restorative protocol.
- * @returns {object} The restorative protocol object.
- */
-function getRestorativeProtocol(reason = 'default') {
-    const restorative = protocolLibrary.find(p => p.protocolId === 'CHAIR_SAVASANA_NECK_SUPPORT');
-    return {
-        ...restorative,
-        rationale: {
-            S: 0,
-            reason: `Safety fallback triggered: ${reason}`,
-            terms: {},
-            weights_used: {}
-        }
+    const gates = {
+        hr: hrDelta <= THRESHOLDS.HR_GATE_BPM_OVER_RHR,
+        pv: zPV <= THRESHOLDS.PV_COMPLEXITY_GATE_MAD,
+        pem: currentMetrics.pemScore < THRESHOLDS.PEM_MAX_SCORE,
+        // Check for RMSSD trend drop locally (this requires checking IndexedDB history, or a simplified check)
+        rmssdTrend: rmssdZ > -computeZScore(THRESHOLDS.RMSSD_TREND_DROP_PCT / 100 * baselines.RMSSD_MEDIAN, 'RMSSD', baselines)
     };
-}
 
-/**
- * Provides a default/seed baseline for new users without sufficient session history.
- * @returns {object} A seed baseline object.
- */
-function getSeedBaseline() {
+    const isSafe = Object.values(gates).every(g => g === true);
+    return { isSafe, gates };
+};
+
+
+// 2. The Slow Adaptive Decision Loop (2-3 minutes)
+export const getAdaptiveProtocol = async (preProtocolMetrics) => {
+    const baselines = await loadBaselines();
+
+    // SQM Gating: assume this comes from sensor_engine.js
+    const SQM_RMSSD = preProtocolMetrics.rmssdSQM;
+    const SQM_PV = preProtocolMetrics.pupilPVSQM;
+
+    // Apply SQM check to weights (auto-zero if signal quality is low)
+    const w_rmssd_adj = SQM_RMSSD < 0.7 ? 0 : W.w_rmssd;
+    const w_pv_adj = SQM_PV < 0.7 ? 0 : W.w_pv;
+
+    // Compute Z-scores for S formula inputs
+    const zRMSSD = 0; // Use expected RMSSD delta, or prior session delta (for v1 MVP, assume expected=0 or use last log)
+    const zPV = computeZScore(preProtocolMetrics.pupilPV, 'PV', baselines);
+    const zRespVar = computeZScore(preProtocolMetrics.respVar, 'RESPVAR', baselines);
+    const zRespRateErr = Math.abs(computeZScore(preProtocolMetrics.respRate, 'RESPRATE_TARGET', baselines));
+    const zFatigue = computeZScore(preProtocolMetrics.fatigue, 'FATIGUE_ADJ', baselines);
+
+    // Placeholder: Iterate through ALL protocols/poses from the local library
+    const candidateProtocols = []; // Load from local pose JSON
+    let bestProtocol = null;
+    let maxS = -Infinity;
+
+    for (const protocol of candidateProtocols) {
+        // Step A: Check safety gates (using real-time metrics)
+        const safetyResult = checkSafetyGates(preProtocolMetrics, baselines);
+        if (!safetyResult.isSafe) continue;
+        if (protocol.EffortScore > preProtocolMetrics.userCapacity) continue;
+
+        // Step B: Compute Utility Score S
+        // (RMSSD delta expected/recent is complex, use 0 for now until empirical data is logged)
+        const S = (w_rmssd_adj * zRMSSD) -
+                  (w_pv_adj * zPV) -
+                  (W.w_respvar * zRespVar) -
+                  (W.w_resprate_error * zRespRateErr) -
+                  (W.w_fatigue * zFatigue);
+
+        if (S > maxS && S > 0) {
+            maxS = S;
+            bestProtocol = protocol;
+        }
+    }
+
+    if (!bestProtocol) {
+        // Fallback: Restorative Savasana on Chair (Effort=0)
+        return { protocolId: "CHAIR_SAVASANA_NECK_SUPPORT", score: { S: 0 } };
+    }
+
     return {
-        rmssd: { median: 30, mad: 8 },
-        respVar: { median: 0.1, mad: 0.05 },
-        pupilPV: { median: 0.15, mad: 0.05 },
+        protocolId: bestProtocol.ProtocolID,
+        breath: bestProtocol.BreathDefault, // Simplified for MVP
+        score: { S: maxS, z_rmssd: zRMSSD, z_pv: zPV }
     };
-}
-
-
-export {
-    selectProtocol
 };
