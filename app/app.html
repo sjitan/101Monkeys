@@ -3,20 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>101Monkeys - Pacer Protocol</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <title>101Monkeys - Pacer App</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <h1>Pacer Protocol</h1>
-    <div id="video-container">
-        <video id="input_video" autoplay muted playsinline></video>
-        <canvas id="output_canvas" width="1280" height="720"></canvas>
+    <div class="container">
+        <h1>Pacer Protocol Session</h1>
+        <div id="video-container">
+            <video id="input_video" autoplay muted playsinline></video>
+            <canvas id="output_canvas" width="640" height="360"></canvas>
+        </div>
+        <div id="protocol-display">
+            <h2>Current Protocol:</h2>
+            <p id="protocol-name">Initializing...</p>
+            <a href="#" id="protocol-link" target="_blank" rel="noopener noreferrer">Watch Video</a>
+        </div>
+        <div id="debug-panel" style="display: none;">
+            <h3>Debug Scores</h3>
+            <pre id="debug-output"></pre>
+        </div>
     </div>
-    <script src="js/cv_sensor.js"></script>
-    <script src="js/cognito_auth.js"></script>
-    <script src="js/api.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script type="module" src="js/cv_sensor.js"></script>
 </body>
 </html>
