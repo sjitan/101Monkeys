@@ -35,5 +35,17 @@ export const SensorEngine = {
             blink_rate: 18 + Math.random() * 4,
             fatigue: 3 + Math.random() * 3
         };
+    },
+    // Adding a separate mock function for clarity in the triage stage
+    getMockFeatures: function() {
+        return this.getAllFeatures();
+    },
+    /**
+     * Simulates setting the sensitivity of the sensors.
+     * @param {string} level - The desired sensitivity level ('high', 'low', 'normal').
+     */
+    setSensitivity: function(level) {
+        console.log(`[SensorEngine] Sensitivity set to: ${level.toUpperCase()}`);
+        // In a real implementation, this would adjust sensor parameters.
     }
 };

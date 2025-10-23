@@ -3,7 +3,7 @@
 import { BaselineStore } from './baseline_store.js';
 import { ProtocolLibrary } from './protocol_library.js';
 import { FederatedManager } from './federated_manager.js';
-// The SensorEngine would be imported in a full app structure.
+import { sensorEngine } from './sensor_engine.js'; // Correctly import sensorEngine
 
 console.log("Decision Engine (Fully Integrated with Sequences & FL) Loaded.");
 
@@ -99,3 +99,57 @@ export class PacerSessionManager {
         }
     }
 }
+
+/**
+ * Performs a "Fast Triage" to determine the user's current state and recommend an initial protocol.
+ * This is a synchronous, one-off check, unlike the continuous PacerSessionManager.
+ * @returns {{archetype: string, state: string, audioProtocol: string}} A decision object.
+ */
+function runFastTriage() {
+    console.log("[DecisionEngine] Running Fast Triage...");
+    // 1. Get current user archetype (simulated for this example)
+    // In a real app, this would be fetched from a user profile service.
+    const archetypes = ['Amplifier', 'Insulated'];
+    const userArchetype = archetypes[Math.floor(Math.random() * archetypes.length)];
+
+    // 2. Get a single, current feature vector.
+    // We need baselines to compute the z-scores.
+    const baselines = BaselineStore.getMockUserBaselines(); // Corrected function name
+    const sensorData = sensorEngine.getMockFeatures(); // Use mock features for triage
+    const ft_vector = Pacer_Model.constructFeatureVector(sensorData, baselines);
+    const z_rmssd = ft_vector[3];
+    const sEDA = ft_vector[8];
+
+    let state;
+    let audioProtocol;
+
+    // 3. Make a decision based on a simple heuristic.
+    if (userArchetype === 'Amplifier') {
+        // Amplifiers are prone to high-sympathetic states.
+        if (sEDA > 1.5) {
+            state = 'High-Sympathetic';
+            audioProtocol = 'dojo_amplifier/warmup_gating_03.mp3';
+        } else {
+            state = 'Stable';
+            // A different protocol could be chosen for a stable state.
+            audioProtocol = 'dojo_amplifier/warmup_gating_03.mp3'; // Default for now
+        }
+    } else { // 'Insulated'
+        // Insulated users might be in a low-vagal state.
+        if (z_rmssd < -1.0) {
+            state = 'Low-Vagal';
+            audioProtocol = 'dojo_insulated/warmup_activation_01.mp3';
+        } else {
+            state = 'Stable';
+            audioProtocol = 'dojo_insulated/warmup_activation_01.mp3'; // Default for now
+        }
+    }
+
+    const decision = { userArchetype, state, audioProtocol };
+    console.log(`[DecisionEngine] Triage complete. Decision:`, decision);
+    return decision;
+}
+
+export const decisionEngine = {
+    runFastTriage,
+};

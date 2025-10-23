@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collective Resonance Event Test</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        button { font-size: 1.2rem; padding: 10px 20px; cursor: pointer; }
+        #log { margin-top: 20px; border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; white-space: pre-wrap; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Collective Resonance Event Test Page</h1>
+    <p>Open the browser's developer console to see detailed logs.</p>
+    <button id="startEventButton">Start 15-Second Test Event</button>
+    <div id="log"></div>
+
+    <script type="module">
+        import { collectiveEventEngine } from './js/collective_event_engine.js';
+
+        const startButton = document.getElementById('startEventButton');
+        const logContainer = document.getElementById('log');
+
+        // Redirect console.log to the on-screen log for easier debugging
+        const oldLog = console.log;
+        console.log = function (message, ...args) {
+            if (typeof message === 'object') {
+                logContainer.innerHTML += `${JSON.stringify(message, null, 2)} ${args.join(' ')}\n`;
+            } else {
+                logContainer.innerHTML += `${message} ${args.join(' ')}\n`;
+            }
+            logContainer.scrollTop = logContainer.scrollHeight;
+            oldLog.apply(console, arguments);
+        };
+
+        startButton.addEventListener('click', () => {
+            console.log('--- BUTTON CLICKED: Starting Event ---');
+            // No initialization is needed as per baseline_store.js
+            collectiveEventEngine.startEvent();
+            startButton.disabled = true;
+            startButton.textContent = 'Event in Progress...';
+        });
+    </script>
+</body>
+</html>
