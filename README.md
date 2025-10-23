@@ -1,9 +1,9 @@
 🧠 101Monkeys
-An audio-first, bioadaptive pacing companion that helps you prevent crashes and reclaim your life from chronic illness.
+A bioadaptive pacing companion that uses audio-visual guidance and Augmented Reality to help you prevent crashes and reclaim your life from chronic illness.
 
-This is not a "health tracker" or an "energy dashboard." It is an adaptive intervention platform designed to do one thing: reduce the cognitive load of being sick.
+This is not a "health tracker" or a simple "audio app." It is an adaptive intervention platform that delivers personalized Chair Yoga and breathing exercises through a unique combination of computer vision, AR, and audio. The AR display, with its target pose "ghost" and real-time alignment feedback, is a core component of the intervention. The audio guides what to do; the AR shows how to align.
 
-For our users, their F_t vector, their "flinch" data, and their "energy score" are meaningless. That's our data to manage the feedback loop. The user's only job is to press "play" and follow the guided audio protocol—a calm, meditative voice that delivers the exact chair yoga or breathing exercise their body needs, right when it needs it.
+For our users, the underlying complexity is hidden. Their only job is to press "play" and follow the synchronized audio-visual guidance, which is dynamically adapted to their body's real-time needs.
 
 ## 1. The Core Problem: A "Life Hijacked"
 This project is built on a deep understanding of our core users: the "shut-in" populations with ME/CFS (Myalgic Encephalomyelitis/Chronic Fatigue Syndrome) and Dysautonomia.
@@ -16,18 +16,16 @@ Based on our research, the core problem is not just the physiological symptom of
 
 A simple "energy tracker" fails because it worsens this problem. It's a "cold calculator" that can increase self-blame ("you failed your energy budget") and reinforce the user's identity as a "manager of their illness" rather than a participant in life.
 
-## 2. Our Solution: The "Audio-First" Companion
-Our philosophy is the "No-Dashboard Mandate." We are an intervention, not an analyzer.
+## 2. Our Solution: The Empathetic Companion
+Our philosophy is the "No-Dashboard Mandate." We are an intervention, not an analyzer. The user's entire experience is built around the synchronized audio-visual engine.
 
-The user's entire experience is built around the `app/js/audio_engine.js`. This is the product.
+Our core loop is: **Sense ➔ Evaluate ➔ Adapt ➔ Intervene.**
 
-Our core loop is: **Sense ➔ Triage ➔ Intervene.**
+*   **Sense**: Our full sensor stack runs a real-time analysis of the user's `F_t` vector.
+*   **Evaluate & Adapt**: The `decision_engine` feeds this `F_t` into the `Pacer_Model` to predict the best next step, dynamically adapting the protocol.
+*   **Intervene**: The `audio_engine` and `ar_renderer` deliver the selected audio-visual instruction.
 
-*   **Sense**: Our full sensor stack (Layer 3) runs a real-time analysis of the user's `F_t` vector (their complete physiological state).
-*   **Triage**: Our "Triage Component" (Layer 4) instantly analyzes this `F_t` data against the user's assigned "Archetype." It makes a decision (e.g., "This is an Amplifier in a high-stress state").
-*   **Intervene**: The Triage Component calls the `audio_engine`, which plays the exact guided protocol needed (e.g., `audio_engine.play('gating_protocol_02_10min.mp3')`).
-
-The "empathetic UI" is not a set of well-worded alerts. It is the calm, meditative, human voice delivering the right intervention at the right time.
+The "empathetic UI" is the combination of a calm, meditative voice and clear, non-judgmental visual feedback that delivers the right intervention at the right time.
 
 ## 3. The Market: The "Autonomic Profile" Rubric
 Our entire architecture is built to serve the unique, non-monolithic needs of our clinical market. We classify users on two performance-based axes to determine their "Archetype." This is our "sorting hat" for the whole platform.
@@ -68,117 +66,68 @@ This is the "fail-safe" front door to prevent "Garbage In, Garbage Out" (GIGO).
 *   **Weighting (The "Attention")**: If the signal is usable, the `fidelity_score` is passed as a feature to the `Pacer_Model`. The model's Attention Layer uses this score to dynamically "trust" the highest-quality signal (e.g., if `mic_fidelity` is low, it "down-weights" `RespVar` and "up-weights" `RF_RespRate`).
 
 ### Layer 4: The Complete Sensor & Feature Stack
-This is the full inventory of all features extracted on-device. No features from the original MVP have been lost.
+This is the full inventory of all features extracted on-device.
 
 *   **[HUB 1]: Front Camera (RGB / PPG / IR)**
-    *   `z(RMSSD)`: (from PPG) The core measure of Vagal Tone (State).
-    *   `z(ΔRMSSD)`: (from PPG) The trend of Vagal Tone (Vagal Efficacy).
-    *   `PV_sequence`: (from Ocular) The "movie" (sequential data) of Pupil Variability, our Locus Coeruleus/sympathetic proxy.
-    *   `z(ΔPV)`: The trend (rate-of-change) of Pupil Variability (Sympathetic Trend).
-    *   `z(GazeStability)`: (from Ocular) Proxy for attentional adherence.
-    *   `z(BlinkRate)`: (from Ocular) Proxy for cognitive fatigue/dopamine levels.
-    *   `z(MicroExpression_Trigger)`: (from Facial) The "emotional flinch" signal.
-    *   `z(Thermal_sequence)`: (from IR) The "vascular flinch" (peripheral vasoconstriction).
+    *   `z(RMSSD)`, `z(ΔRMSSD)`: Vagal Tone (State & Trend).
+    *   `PV_sequence`, `z(ΔPV)`: Sympathetic Arousal (State & Trend).
+    *   `z(GazeStability)`, `z(BlinkRate)`: Cognitive Adherence & Fatigue.
+    *   `z(MicroExpression_Trigger)`, `z(Thermal_sequence)`: The "Flinch" signals.
 *   **[HUB 2]: Microphone**
-    *   `z(RespVar)`: (MVP Feature) The true measure of Cardiorespiratory Coherence.
-    *   `z(RespRate - RF)`: (MVP Feature) The "Protocol Adherence" error signal (Actual Rate vs. Target Rate).
+    *   `z(RespVar)`, `z(RespRate - RF)`: Coherence & Protocol Adherence.
 *   **[HUB 3]: RF (Wi-Fi/Radar)**
-    *   `z(RF_RespRate)`: The passive respiratory baseline (when no protocol is active).
-    *   `z(RF_Bracing)`: The sub-motor, whole-body "motor flinch" signal.
+    *   `z(RF_RespRate)`, `z(RF_Bracing)`: Passive Respiration & Motor "Flinch".
 *   **[HUB 4]: User Input**
-    *   `z(Fatigue)`: (MVP Feature) The user's subjective, self-reported fatigue (via slider).
+    *   `z(Fatigue)`: Subjective fatigue score.
 *   **[HUB 5]: Internal Models (On-Device)**
-    *   **The sEDA_Model**: A CNN-LSTM that runs on-device.
-        *   **Input**: `PV_sequence` + `Thermal_sequence`
-        *   **Output**: `z(sEDA)` (A high-fidelity synthetic sympathetic arousal signal).
+    *   **The sEDA_Model**: Fuses `PV_sequence` + `Thermal_sequence` into `z(sEDA)`, a high-fidelity sympathetic arousal signal.
 
 ### Layer 5: The Core Engine (The Pacer_Model)
 This is the main GRU/Transformer model that runs on-device.
 
-*   **Target Variable (Y_actual)**: The clinically-defined "Successful Safe Shift" (unchanged).
-    *   `Y = 1` if (`RMSSDΔ z-score > +0.5`) AND (`PV_complexity z-score < +1.5`)
-    *   `Y = 0` otherwise.
-*   **Input (F_t)**: The final, fully-fused, and hardened Feature Vector.
+*   **Target Variable (Y_actual)**: The clinically-defined "Successful Safe Shift": `Y = 1` if (`RMSSDΔ z-score > +0.5`) AND (`PV_complexity z-score < +1.5`).
+*   **Input (F_t)**: The final, fully-fused, and hardened Feature Vector from Layer 4.
+*   **Adaptive Sequencing Logic (The Core Loop)**: The `Pacer_Model` is not used just once per session. It operates within a continuous feedback loop managed by `decision_engine.js`.
+    1.  An initial protocol/pose is selected based on the user's starting state (`F_t`).
+    2.  As the user performs the audio-visual instruction, the `sensor_engine` captures real-time physiological response and adherence (`PoseAdherence`, `MovementQuality`).
+    3.  This updated `F_t` is fed back into the `Pacer_Model` before the next instruction.
+    4.  The model predicts the likely success (U-score) of potential next poses/cues.
+    5.  The `decision_engine` selects the optimal next step, which may dynamically override the original plan to ensure safety and efficacy (e.g., switching to a restorative pose if stress is detected).
+    6.  This **Sense -> Evaluate -> Adapt -> Intervene** loop repeats every few seconds throughout the session, creating a truly bioadaptive experience.
 
-```javascript
-// The F_t vector fed into the Pacer_Model
-F_t = [
-  // === Fidelity Weights (from SQA Layer) ===
-  ocular_fidelity,
-  mic_fidelity,
-  rf_fidelity,
-
-  // === Vagal (Heart) (from Camera) ===
-  z(RMSSD),
-  z(ΔRMSSD),
-
-  // === Sympathetic (Arousal) ===
-  z(PV_sequence),      // (from Camera)
-  z(ΔPV),            // (from Camera)
-  z(Thermal_sequence), // (from Camera IR)
-  z(sEDA),           // (from Internal sEDA_Model)
-
-  // === Motor "Flinch" ===
-  z(RF_Bracing),              // (from RF)
-  z(MicroExpression_Trigger), // (from Camera)
-
-  // === Respiratory (Coherence & Adherence) ===
-  z(RespVar),        // (from Mic)
-  z(RespRate - RF),  // (from Mic, MVP Feature)
-  z(RF_RespRate),    // (from RF)
-
-  // === Cognitive (Fatigue & Adherence) ===
-  z(GazeStability), // (from Camera)
-  z(BlinkRate),     // (from Camera)
-  z(Fatigue)        // (from User Input, MVP Feature)
-]
-```
 ### Layer 6: The Coherence Facilitation Platform (The Product)
-This is the "Audio-First" application layer that serves our Dual Mission.
+This is the audio-visual application layer that serves our Dual Mission.
 
-*   **A. The "Audio-Visual" Engine (`app/js/audio_engine.js` + UI Layer + `ar_renderer.js`):**
+*   **A. The "Audio-Visual" Engine (`app/js/audio_engine.js` + `ar_renderer.js`)**:
     *   This is the **user-facing product**. It delivers **synchronized audio and visual guidance**. It is *not* a dashboard.
-    *   **Primary Modality (Audio):** An adaptive audio player containing libraries of "nice voice, almost meditative" guided Chair Yoga + Breathing protocols. It plays the `Selected_Protocol` chosen by the `decision_engine`. The user primarily listens to this guidance.
-    *   **Complementary Modality (Visual AR Feedback - MVP):**
-        *   **Purpose:** To provide *glanceable, intuitive, visual confirmation* that the user's body position aligns with the target pose instructed by the audio guide.
-        *   **Interface:** The UI displays the live front camera feed with an **Augmented Reality (AR) overlay** rendered on top via `<canvas>`.
-        *   **Guidance:**
-            1.  A subtle **target pose "ghost"** (static grey skeleton) shows the ideal alignment for the *current* audio instruction.
-            2.  The user's **own detected pose skeleton** (derived from on-device Pose Estimation) is overlaid in real-time. **Uncertain parts (low confidence score) are not drawn or are faded** to avoid misleading feedback.
-            3.  **Real-Time Alignment Feedback:** The `pose_matcher.js` compares the user's main body segments (arms, legs, torso) to the target. The `ar_renderer.js` provides immediate, simple **color-coding** on the *user's* skeleton – correctly aligned segments glow **green**, misaligned segments glow **red**.
-        *   **Low Cognitive Load:** The AR display is minimalist and designed for **quick glances only**. The user listens to the audio and uses the visual overlay for brief self-correction. Audio remains the primary focus.
-*   **B. The "Dojos" (The Facilitation)**:
-    *   We are facilitators, not "engineers." We provide the right conditions for emergence.
-    *   The audio protocols are tailored to the user's Archetype.
-    *   **"Gating Dojo" (for Amplifiers)**: Audio protocols that reward autonomic stillness and "gating" the flinch.
-    *   **"Activation Dojo" (for the Insulated)**: Audio protocols that train "Stress-and-Recover" loops to build autonomic flexibility.
-    *   **"Operator Dojo" (for Operators)**: The "Sender/Receiver" CEPs, which provide the audio-guided feedback loop for them to "train themselves" into greater coherence.
-*   **C. The Research Protocol (CEP)**:
-    *   This is our falsifiable test for the "Flinch" hypothesis.
-    *   **CEP (Controlled Event Protocol)**: An in-app protocol that creates a controlled, time-locked `T_0` event (a "startle" or "neutral" stimulus).
-    *   **Presentiment Test**: We analyze the user's `F_t` before the `T_0` random stimulus to search for a precognitive "flinch."
-    *   **Sender/Receiver Test**: We time-lock a "Sender's" `T_0` "Charge" event with a "Receiver's" passive `F_t` data to search for a non-local correlation.
-*   **D. The "Human-Centered" Features (The "Why" Revisited)**:
-    *   To address the "lost self" and "isolation" from our market research, the platform also includes:
-    *   **Private Journal**: An optional, 100% on-device (IndexedDB) journal module with prompts to process grief and find non-physical identity.
-    *   **Connection Module**: An optional, opt-in "Buddy System" to share "small wins" or a "readiness" status with 1-3 trusted friends.
+    *   **Primary Modality (Audio):** An adaptive audio player delivering guided Chair Yoga + Breathing protocols.
+    *   **Complementary Modality (Visual AR Feedback):** Provides glanceable, intuitive, visual confirmation of pose alignment via a real-time, color-coded AR skeleton overlay. The audio guides *what* to do; the AR shows *how* to align.
 
-## 5. 📚 Research & Market Validation Library
-The strategy for this platform is built on extensive market and user research. These documents provide the full "Saga of Context" and justification for our "Audio-First, Empathetic-Companion" approach.
+*   **B. 🧘‍♂️ Chair Yoga Pose Library**:
+    *   This library defines the fundamental building blocks for the adaptive interventions. Each pose requires synchronized assets for both the `audio_engine` and the `ar_renderer`.
+    *   **Asset Requirements Per Pose:**
+        1.  **Audio Instruction (.mp3):** A calm audio segment guiding the user.
+        2.  **Target Pose Skeleton (`target_poses.js`):** Defines the canonical keypoint coordinates for the pose "ghost".
+    *   **Pose Categories:**
+        *   **Grounding / Centering:** Seated Mountain, Neck Rolls, etc.
+        *   **Mobilizing / Energizing:** Seated Cat-Cow, Spinal Twist, etc.
+        *   **Restorative / Release:** Supported Forward Fold, Chair Savasana, etc.
 
-*   `./docs/PMR_Market_Validation.md`: (The first "Lit Review"). This document validates the $460M+ market for a PEM-prevention tool for ME/CFS and Dysautonomia and confirms our core user personas.
-*   `./docs/PMR_Human_Centered_Critique.md`: (The "Revised" Lit Review). This critical analysis introduces the real user problem: the "lost self," grief, and isolation. It provides the "why" for our pivot away from a "cold calculator" and toward an "empathetic companion."
-*   **`./docs/THEORETICAL_FRAMEWORK_DETAILED.md`**: **(NEW)** This internal document provides the **detailed scientific and theoretical background** (Vagus Nerve, Stargate/Psi, JD/Coherence, Kundalini) that informs our sensor choices, protocols, and research hypotheses. **This provides the deep context for *why* the platform is designed this way.**
+*   **C. The Research & Human-Centered Features**:
+    *   **Research Protocol (CEP):** A falsifiable, in-app test for the "Flinch" hypothesis.
+    *   **Private Journal & Connection Module:** Optional, on-device features to address the "lost self" and isolation.
 
-## 6. 🚀 Project Status
-*   **Phase**: 1.0 (MVP)
-*   **Status**: The Jules-Hardened architecture is specified. Development is focused on implementing the SQA Layer, the sEDA_Model, and the Dojo Audio Engine as the core MVP features.
-*   **Next Steps**:
-    1.  Implement `app/js/sensor_engine.js` for the full `F_t` vector.
-    2.  Implement `app/js/audio_engine.js` with the initial "Dojo" audio libraries.
-    3.  Implement the `fl_server` for Federated Clustering.
+## 7. 📚 Project Documentation (The Saga of Context)
+The strategic, market, and user research that forms the "Saga of Context" for this project is maintained in the `/docs` directory.
 
-## 7. ⚖️ License
+*   `./docs/PMR_Market_Validation.md`: Validates the market for a PEM-prevention tool for ME/CFS and confirms our user personas.
+*   `./docs/PMR_Human_Centered_Critique.md`: Introduces the *real* user problem: the "lost self," grief, and isolation.
+*   **`./docs/THEORETICAL_FRAMEWORK_DETAILED.md`**: This internal document provides the **detailed scientific and theoretical background** (Vagus Nerve, Stargate/Psi, JD/Coherence, Kundalini) that informs our architecture.
+
+## 8. 🚀 Future Vision: Towards Wearable AR
+While the current MVP is designed for smartphones (PWA), the long-term vision for the AR/CV component is integration with wearable AR glasses. This would provide a truly seamless, hands-free experience where the user could perform the Chair Yoga while seeing the target pose "ghost" and their own alignment feedback reflected in a mirror or overlaid onto their environment. The current architecture, using on-device CV and rendering, is designed with this future portability in mind.
+
+## 9. ⚖️ License
 MIT © 2025 101Monkeys Lab
 
 *Disclaimer: This is a research and wellness platform. It makes no medical claims and is not a substitute for professional medical advice, diagnosis, or treatment.*

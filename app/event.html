@@ -3,84 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Collective Resonance Event Test (with AR)</title>
+    <title>Adaptive Engine Test</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f0f0f0; }
-        .container { max-width: 640px; margin: auto; }
-        .ar-container {
-            position: relative;
-            width: 640px;
-            height: 480px;
-            margin: 20px 0;
-            background-color: #000;
-        }
-        #video-feed {
-            width: 100%;
-            height: 100%;
-            display: block;
-            transform: scaleX(-1); /* Mirror the video */
-        }
-        #ar-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        .controls { display: flex; justify-content: space-between; align-items: center; }
-        button { font-size: 1.2rem; padding: 10px 20px; cursor: pointer; }
-        #status { font-size: 1.1rem; font-weight: bold; }
+        body { font-family: sans-serif; padding: 20px; }
+        .ar-container { position: relative; width: 640px; height: 480px; background-color: #000; }
+        #video-feed { width: 100%; height: 100%; transform: scaleX(-1); }
+        #ar-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        button { font-size: 1.2rem; padding: 10px 20px; margin-top: 10px; }
     </style>
+    <!-- Import all necessary modules -->
+    <script type="module" src="./js/sensor_engine.js"></script>
+    <script type="module" src="./js/audio_engine.js"></script>
+    <script type="module" src="./js/pose_estimation.js"></script>
+    <script type="module" src="./js/target_poses.js"></script>
+    <script type="module" src="./js/protocol_library.js"></script>
+    <script type="module" src="./js/pose_matcher.js"></script>
+    <script type="module" src="./js/ar_renderer.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Audio-Visual Event Test Page</h1>
-        <p>This page demonstrates the full 3-stage event: Warm-up, AR Sync, and Cool-down.</p>
-
-        <div class="ar-container">
-            <video id="video-feed" autoplay playsinline></video>
-            <canvas id="ar-canvas" width="640" height="480"></canvas>
-        </div>
-
-        <div class="controls">
-            <button id="startEventButton">Start AR Session</button>
-            <div id="status">Status: Idle</div>
-        </div>
+    <h1>Adaptive Sequencing Engine Test</h1>
+    <div class="ar-container">
+        <video id="video-feed" autoplay playsinline></video>
+        <canvas id="ar-canvas" width="640" height="480"></canvas>
     </div>
+    <button id="startEventButton">Start Session</button>
 
     <script type="module">
-        import { collectiveEventEngine } from './js/collective_event_engine.js';
+        import { decisionEngine } from './js/decision_engine.js';
 
         const uiElements = {
             buttonElement: document.getElementById('startEventButton'),
             videoElement: document.getElementById('video-feed'),
             canvasElement: document.getElementById('ar-canvas'),
-            statusElement: document.getElementById('status'),
         };
 
-        // --- Mock Camera Feed ---
+        // Mock Camera Feed
         const mockCtx = document.createElement('canvas').getContext('2d');
-        mockCtx.canvas.width = 640;
-        mockCtx.canvas.height = 480;
-        function mockCameraLoop() {
-            mockCtx.fillStyle = '#222';
-            mockCtx.fillRect(0, 0, 640, 480);
-            mockCtx.fillStyle = '#fff';
-            mockCtx.font = '24px sans-serif';
-            mockCtx.textAlign = 'center';
-            mockCtx.fillText('Mock Camera Feed', 320, 240);
+        mockCtx.canvas.width = 640; mockCtx.canvas.height = 480;
+        setInterval(() => {
+            mockCtx.fillStyle = '#222'; mockCtx.fillRect(0, 0, 640, 480);
+            mockCtx.fillStyle = '#fff'; mockCtx.font = '24px sans-serif';
+            mockCtx.textAlign = 'center'; mockCtx.fillText('Mock Camera Feed', 320, 240);
             uiElements.videoElement.srcObject = mockCtx.canvas.captureStream();
-        }
-        setInterval(mockCameraLoop, 100);
+        }, 100);
 
-        // --- Event Wiring ---
+        // Event Wiring
         uiElements.buttonElement.addEventListener('click', () => {
             if (uiElements.buttonElement.textContent.includes('Start')) {
-                collectiveEventEngine.startEvent(uiElements);
-                uiElements.buttonElement.textContent = 'Stop AR Session';
+                arRenderer.initialize(uiElements.canvasElement);
+                decisionEngine.startSession('Default', uiElements);
+                uiElements.buttonElement.textContent = 'Stop Session';
             } else {
-                collectiveEventEngine.stopEvent();
-                uiElements.buttonElement.textContent = 'Start AR Session';
+                decisionEngine.stopSession();
+                uiElements.buttonElement.textContent = 'Start Session';
             }
         });
     </script>
