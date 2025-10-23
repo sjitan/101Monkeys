@@ -1,14 +1,9 @@
-/* app/css/app.css */
+/* Placeholder for application styles */
 body {
     font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
     background-color: #f0f0f0;
-    color: #333;
-    padding: 2em;
-}
-
-button {
-    padding: 10px 15px;
-    font-size: 16px;
-    margin: 5px;
-    cursor: pointer;
 }

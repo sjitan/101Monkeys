@@ -1,14 +1,31 @@
 {
-  "efficacy_threshold_rmssd": 0.5,
-  "safety_threshold_pv": 1.5,
-  "session_duration_s": 180,
-  "feature_vector_keys": [
-    "z_rmssd",
-    "z_delta_rmssd",
-    "z_pv",
-    "z_delta_pv",
-    "z_resp_var",
-    "z_resp_rate_error",
-    "z_fatigue"
-  ]
+    "model_settings": {
+        "tfl_model_path": "app/tfl/{cluster_id}/model.json",
+        "feature_keys": [
+            "z_pv_sequence",
+            "ocular_fidelity",
+            "z_seda",
+            "z_rf_resprate",
+            "rf_fidelity",
+            "z_rf_bracing",
+            "z_gaze_stability"
+        ]
+    },
+    "sqa_thresholds": {
+        "ocular_fidelity": 0.7,
+        "rf_fidelity": 0.6
+    },
+    "research_protocol": {
+        "cep_stages": {
+            "baseline": {
+                "duration_minutes": 3
+            },
+            "intervention": {
+                "duration_minutes": 5
+            },
+            "recovery": {
+                "duration_minutes": 3
+            }
+        }
+    }
 }

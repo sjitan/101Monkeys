@@ -1,69 +1,102 @@
-# 🧠 101Monkeys — Phase 3: The Adaptive Cluster Network
+# 🧠 101Monkeys — Jules-Ready Specification
 
-**A Self-Organizing, Multi-Model Platform for Delivering Clinically Superior Pacing and Rigorously Testing Coherence Hypotheses.**
-
----
-
-## 📖 Overview: A Strategic Pivot
-
-The **101Monkeys Pacer Protocol** began by establishing a robust, on-device sensor for individual autonomic regulation. However, our Phase 2 architecture, based on a single "Global Model," contained two critical, interconnected flaws that would fail a hardening review:
-
-1.  **The "Global Model" is a Trap:** A single model, even one trained via federated learning, is a critical clinical and business flaw. The autonomic "crash" signature for an ME/CFS user is **fundamentally different** from that of a healthy "Stargate" researcher. By averaging them, we create a model that is **not optimal for anyone** and could even be **dangerous** for our core clinical users.
-
-2.  **The "Global Event" Hypothesis is Unfalsifiable:** Relying on *external*, uncontrolled events (earthquakes, market crashes) to test our coherence hypotheses is a logistical and statistical nightmare. It is not a scientifically rigorous method and leaves our core mission as a vague "maybe."
-
-This document outlines **Phase 3**, a strategic pivot to a self-organizing, multi-model network. We will simultaneously deliver a **clinically superior pacer** for our core users while building a **rigorously controlled protocol** to test our coherence hypotheses.
-
-This new phase introduces two non-negotiable components: **Federated Clustering** and the **Controlled Event Protocol (CEP).**
+**An On-Device, Multi-Modal, Privacy-First Bio-Pacing and Research Platform**
 
 ---
 
-## ⚙️ System Architecture: Edge-First with a Clustering Backend
+## 🎯 Mission
 
-Our architecture is now a hybrid model that prioritizes on-device computation while using a lightweight backend for intelligent model routing.
-
-*   **Client / Edge (PWA):** The primary application running on the user's device.
-    *   **Responsibilities:** All real-time, high-frequency tasks: physiological sensing (`sensor_engine.js`), pacing, and executing the experimental protocol (`cep_engine.js`).
-    *   **Federated Model Loading:** It dynamically loads the correct, cluster-specific deep learning model by first querying the backend (`federated_manager.js`, `dl_engine.js`).
-
-*   **Backend (AWS Lambda):** A stateless, lightweight service.
-    *   **Responsibility:** The `Cluster Assigner`'s sole job is to run a clustering algorithm (currently stubbed) that assigns a `userId` to a specific physiological cluster (e.g., `cluster_A`, `cluster_B`).
-    *   **Output:** It tells the client which cluster it belongs to and where to download the appropriate model (`/app/tfl/cluster_A/model.json`).
+To deliver a clinically conservative, on-device pacing assistant that nudges the Autonomic Nervous System (ANS) toward coherence—measured, not imagined. We combine multimodal sensing (ocular, RF, synthetic EDA) with a rigorous, privacy-preserving machine learning architecture to provide real-time, personalized pacing for sensitive clinical populations (ME/CFS, Dysautonomia) while simultaneously creating a testbed for novel hypotheses on autonomic coherence.
 
 ---
 
-## 🔬 Core Components
+## ⚙️ The Architecture: An Adaptive Cluster Network
 
-### 1. Federated Clustering: Personalized and Safe
+Our system is a hybrid, edge-first architecture that uses a network of specialized, dynamically-loaded models to provide personalized and safe pacing.
 
-Instead of training one global model, we now deploy a **network of specialized models.**
+1.  **Client/Edge (PWA):** The primary application runs entirely on the user's device. It handles all real-time sensing, data processing, model inference, and user-facing protocols. It operates fully offline, ensuring privacy and resilience.
 
-1.  **Assignment:** When a user logs in, the `FederatedManager` on the client sends the `userId` to the `Cluster Assigner` Lambda.
-2.  **Clustering:** The backend determines the user's physiological cluster. *In the future, this will be based on the user's baseline autonomic signature.* For now, it's a simple, deterministic assignment.
-3.  **Dynamic Loading:** The client receives its cluster assignment and the path to the corresponding model. The `DLEngine` then downloads and initializes this specialized model.
+2.  **Backend (AWS Lambda):** A lightweight, stateless `Cluster Assigner` service. Its sole responsibility is to assign a user to a physiological cluster based on their anonymized **Autonomic Profile Vector (APV)**. This allows the client to download the correct, specialized `Pacer_Model` for their neurotype.
 
-This ensures that the pacing algorithm is always tailored to the user's specific neurotype, providing a safer and more effective experience for our clinical population.
-
-### 2. The Controlled Event Protocol (CEP): A Rigorous Experimental Framework
-
-The CEP replaces our reliance on unfalsifiable "global events" with a structured, repeatable, and analyzable experimental protocol. It is managed on the client by the `cep_engine.js`, which loads its configuration from `app/config/cep_protocol.json`.
-
-A typical CEP session consists of three distinct stages:
-
-| Stage        | Duration | Purpose                                                              | Data Tag           |
-|--------------|----------|----------------------------------------------------------------------|--------------------|
-| **BASELINE**   | 3 mins   | Establish a stable, pre-intervention physiological baseline.         | `cep_stage:baseline` |
-| **INTERVENTION** | 5 mins   | User engages with the pacer or a specific coherence-training task. | `cep_stage:intervention` |
-| **RECOVERY**   | 3 mins   | Measure the autonomic response and recovery post-intervention.       | `cep_stage:recovery` |
-
-By tagging every data point with its CEP stage, we can now perform rigorous, time-locked analysis to test our hypotheses. For example, we can now ask: "Did the `INTERVENTION` stage produce a statistically significant change in `RMSSD` compared to the `BASELINE` stage?" This is a falsifiable, scientifically valid question.
+3.  **Federated Learning:** The client periodically and anonymously contributes `model_delta` (the mathematical learnings from its on-device training) back to the federated server. This improves the cluster models over time without ever exposing raw user data.
 
 ---
 
-## 🧪 A Testable Hypothesis
+## LAYER 1: The SQA (Fidelity Filter) & Gating
 
-With this new architecture, we can revisit our scientific mission with newfound rigor. The **101Monkeys** app is a **networked, high-sensitivity "biometric antenna"** designed to test for non-local autonomic coherence.
+To solve the "Garbage In, Garbage Out" problem, all sensor data first passes through a two-stage Signal Quality Assurance (SQA) layer.
 
-*   **The Question:** Can a group of individuals, synchronized via the CEP, measurably influence each other's autonomic state in a way that is not explainable by local factors?
-*   **The Method:** We can now conduct experiments where one group (the "senders") undergoes the `INTERVENTION` stage while another group (the "receivers") remains in a `BASELINE` stage. We can then analyze the receivers' data for anomalous physiological responses that are time-locked to the senders' intervention.
-*   **The Data:** The `(F_t, Y_actual, cep_stage, cluster_id)` tuple is our new core data point, enabling a new level of analytical precision for both individual pacing and network-level signal detection.
+1.  **Gating (Go/No-Go):** A lightweight, on-device model provides a fidelity score for each sensor stream (e.g., `ocular_fidelity_score`, `rf_fidelity_score`). If the signal quality is below a critical threshold (due to poor lighting, motion blur, etc.), the processing cycle is aborted.
+
+2.  **Weighting (Trust):** If the signal is usable, the fidelity score is passed as a feature to the main `Pacer_Model`. The model's Attention Layer learns to dynamically "trust" the highest-quality signal, down-weighting noisy inputs in real-time.
+
+---
+
+## THE FULL SENSOR STACK
+
+Our platform fuses data from three distinct, on-device sensor modalities.
+
+### 1. Wi-Fi/Radar (RF) Sensor
+-   **Purpose:** Provides a passive, non-contact "true baseline" for respiration and heart rate, and detects the whole-body, sub-motor **"flinch" response** (`RF_Bracing`) with high sensitivity.
+-   **Outputs:** `RF_RespRate`, `RF_Bracing`
+
+### 2. The Internal Models -> The sEDA Model
+-   **Purpose:** A synthetic Electrodermal Activity (sEDA) model that acts as our primary sympathetic nervous system proxy.
+-   **Inputs:** `PV_sequence` (the "movie" of pupil variability over time) + `Thermal_sequence` (from the phone's thermal sensor).
+-   **Output:** A single `sEDA_score` representing sympathetic arousal.
+
+### 3. Ocular Sensing
+-   **PupilPV:** A high-frequency measure of pupil diameter variability, acting as a proxy for sympathetic arousal (the "flinch").
+-   **GazeStability:** A measure of fixation variance, acting as a proxy for attentional adherence and cognitive fatigue.
+
+---
+
+## THE PACER MODEL (The Core Engine)
+
+The core of our system is a sequential deep learning model (GRU-based) that runs on-device via TensorFlow.js.
+
+-   **Input:** A hardened, z-normalized feature vector `F_t` that fuses the multi-modal sensor data and their corresponding fidelity scores:
+    `F_t = [z(PV_sequence), ocular_fidelity, z(sEDA), z(RF_RespRate), rf_fidelity, z(RF_Bracing), z(GazeStability)]`
+
+-   **Target Variable (Y_actual):** A binary success outcome, defined as:
+    `Y = 1` if `(RMSSDΔ z-score > +0.5) AND (PV_complexity z-score < +1.5)`
+    `Y = 0` otherwise.
+
+-   **Output:** A predicted "Utility Score" (`U`) that informs the real-time pacing decision.
+
+---
+
+## THE ANONYMIZED DATA FLOW (The "Report")
+
+To protect user privacy while enabling federated learning, the client **never** sends raw physiological data. The anonymous report to the federated server consists only of:
+
+1.  `model_delta`: The mathematical gradient updates representing the model's learnings.
+2.  `APV (Autonomic Profile Vector)`: An anonymized vector of baseline physiological traits used by the backend for clustering.
+
+The raw feature vector (`F_t`) and the actual outcome (`Y_actual`) **never leave the device.**
+
+---
+
+## THE RESEARCH PROTOCOL (The "Test")
+
+To rigorously test our hypotheses, we use a **Controlled Event Protocol (CEP)**, a structured, on-device experimental framework.
+
+| Stage        | Duration | Purpose                                       |
+|--------------|----------|-----------------------------------------------|
+| **BASELINE**   | 3 mins   | Establish a stable, pre-intervention baseline.  |
+| **INTERVENTION** | 5 mins   | User engages with a specific pacing protocol. |
+| **RECOVERY**   | 3 mins   | Measure the autonomic recovery post-intervention. |
+
+This allows for falsifiable, scientifically valid tests, such as our **"Presentiment"** and **"Sender/Receiver"** experiments, where we analyze the time-locked autonomic responses of synchronized user groups.
+
+---
+
+## THE "THEORY OF IT ALL" (The "Why")
+
+Our core mission is to test two fundamental hypotheses:
+
+1.  **The "Flinch" Hypothesis:** That a measurable, sub-motor "flinch" response (detected via `RF_Bracing` and `PupilPV`) precedes a significant drop in autonomic coherence and can be used as a predictive feature to prevent Post-Exertional Malaise (PEM).
+
+2.  **The "Amplify" Hypothesis:** That a group of individuals in a coherent state (synchronized via the CEP) can measurably "amplify" their collective autonomic signal, detectable as a non-local correlation in the physiological data of a "receiver" group.
+
+This platform is designed to be the definitive instrument for exploring these questions with scientific rigor and clinical safety.
