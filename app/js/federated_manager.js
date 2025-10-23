@@ -1,111 +1,70 @@
-// Federated Manager: Handles anonymized communication with the backend for federated learning and clustering.
+// Federated Manager: Handles anonymized communication with the backend for archetype classification and federated learning.
 
 console.log("Federated Manager Loaded.");
 
 const FederatedManager = {
-    // This would be your backend endpoint.
-    CLUSTER_ASSIGNER_URL: 'https://api.101monkeys.com/assign_cluster',
+    ARCHETYPE_CLASSIFIER_URL: 'https://api.101monkeys.com/assign_cluster', // This URL will now point to our archetype classifier
 
     /**
-     * Prepares the anonymized "Report" to be sent to the federated server.
-     * This report contains only the mathematical model updates and the anonymized profile vector.
-     * CRUCIALLY, it does not contain the raw feature vector (F_t) or the actual outcome (Y_actual).
+     * Fetches the user's Autonomic Archetype from the backend classifier.
+     * This now sends a POST request with the user's performance metrics.
      *
-     * @param {object} modelDelta - The mathematical gradient updates from the on-device model training.
-     * @param {object} userBaselines - The user's baseline physiological metrics (e.g., mean RMSSD, stdDev PV).
-     * @returns {object} - The anonymized report object.
+     * @param {string} userId - The user's unique identifier.
+     * @param {number} vae_score - Volitional Autonomic Efficacy (e.g., 0.75 for 75% success).
+     * @param {number} nsf_score - Non-Local Signal Fidelity (e.g., a z-score of 1.2).
+     * @returns {Promise<string>} - The archetype tag (e.g., 'Operator').
      */
-    prepareAnonymizedReport: (modelDelta, userBaselines) => {
-        const apv = FederatedManager.createAutonomicProfileVector(userBaselines);
+    getArchetypeAssignment: async (userId, vae_score, nsf_score) => {
+        console.log(`Fetching archetype assignment for userId: ${userId}`);
 
-        const report = {
-            model_delta: modelDelta,
-            apv: apv,
+        // In a real application, this makes a network request.
+        // For now, we simulate the request and the logic of the backend classifier.
+        const requestBody = {
+            userId: userId,
+            vae: vae_score,
+            nsf: nsf_score
         };
 
-        console.log("Prepared Anonymized Report:", report);
-        // In a real application, you would send this report to your backend.
-        // For example:
-        // await fetch(SOME_FEDERATED_SERVER_URL, {
+        // const response = await fetch(FederatedManager.ARCHETYPE_CLASSIFIER_URL, {
         //     method: 'POST',
         //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify(report)
+        //     body: JSON.stringify(requestBody)
         // });
-
-        return report;
-    },
-
-    /**
-     * Creates the Autonomic Profile Vector (APV).
-     * The APV is an anonymized vector of baseline physiological traits used by the backend for clustering.
-     * It allows the backend to group users with similar neuro-profiles without needing raw data.
-     *
-     * @param {object} baselines - An object containing the user's baseline metrics.
-     * @returns {object} - The anonymized Autonomic Profile Vector.
-     */
-    createAutonomicProfileVector: (baselines) => {
-        // Example: The APV could be a collection of z-scores relative to the general population,
-        // or other statistical measures that obscure the raw values.
-        // For this placeholder, we'll just return the baseline stats, but in a real system,
-        // you would want to anonymize this further (e.g., through binning or hashing).
-        const {
-            mean_rmssd,
-            std_dev_pv,
-            mean_gaze_stability
-        } = baselines;
-
-        return {
-            baseline_rmssd: mean_rmssd,
-            baseline_pv_volatility: std_dev_pv,
-            baseline_gaze: mean_gaze_stability
-        };
-    },
-
-    /**
-     * Fetches the cluster assignment from the backend.
-     * @param {string} userId - The user's unique identifier.
-     * @returns {Promise<string>} - The cluster ID (e.g., 'cluster_A').
-     */
-    getClusterAssignment: async (userId) => {
-        // In a real application, this would make a network request.
-        // For now, we'll simulate the response.
-        console.log(`Fetching cluster assignment for userId: ${userId}`);
-        // const response = await fetch(`${FederatedManager.CLUSTER_ASSIGNER_URL}?userId=${userId}`);
         // const data = await response.json();
-        // return data.clusterId;
+        // return data.archetype;
 
-        // Simulate a deterministic assignment for demonstration.
-        // A simple heuristic: users with even-length IDs go to cluster A, odd to cluster B.
-        const clusterId = userId.length % 2 === 0 ? 'cluster_A' : 'cluster_B';
-        console.log(`Assigned to cluster: ${clusterId}`);
-        return clusterId;
+        // --- Simulation of the Backend Logic (for local testing) ---
+        const VAE_THRESHOLD = 0.5;
+        const NSF_THRESHOLD = 0.0;
+        let archetype = "Insulated";
+
+        if (vae_score >= VAE_THRESHOLD && nsf_score >= NSF_THRESHOLD) {
+            archetype = "Operator";
+        } else if (vae_score >= VAE_THRESHOLD && nsf_score < NSF_THRESHOLD) {
+            archetype = "Stabilizer";
+        } else if (vae_score < VAE_THRESHOLD && nsf_score >= NSF_THRESHOLD) {
+            archetype = "Amplifier";
+        }
+
+        console.log(`Assigned to archetype: ${archetype}`);
+        return archetype;
     }
 };
 
 // --- Example Usage ---
 
-// 1. Simulate user baselines.
-const exampleUserBaselines = {
-    mean_rmssd: 45.2,
-    std_dev_pv: 0.12,
-    mean_gaze_stability: 0.92,
-};
+async function runArchetypeExample() {
+    // Simulate user performance data after 20 Pacer and 20 CEP sessions.
+    const userId = "user_operator_1";
+    const vae = 0.8; // High VAE (80% success)
+    const nsf = 1.5; // High NSF (z-score of 1.5)
 
-// 2. Simulate model deltas after a training cycle.
-const exampleModelDelta = {
-    layer1_weights: [0.1, -0.05, 0.2],
-    layer2_bias: [0.01]
-};
+    console.log(`Running example for an 'Operator' profile...`);
+    const archetype = await FederatedManager.getArchetypeAssignment(userId, vae, nsf);
+    console.log(`Final Archetype: ${archetype}`); // Expected: Operator
 
-// 3. Prepare the anonymized report.
-FederatedManager.prepareAnonymizedReport(exampleModelDelta, exampleUserBaselines);
+    // The Decision Engine would then use this archetype to load the correct protocol.
+    // e.g., const protocol = ProtocolLibrary.getProtocol(archetype);
+}
 
-// 4. Get cluster assignment.
-const userId = "user_123456"; // Even length, will be cluster_A
-FederatedManager.getClusterAssignment(userId).then(cluster => {
-    // The DL_Engine would then use this to load the correct model.
-    // e.g., DL_Engine.loadModel(`app/tfl/${cluster}/model.json`);
-});
-
-const anotherUserId = "user_789"; // Odd length, will be cluster_B
-FederatedManager.getClusterAssignment(anotherUserId);
+runArchetypeExample();
