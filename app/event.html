@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Adaptive Engine Test</title>
+    <title>Adaptive Engine Test (3-Stage Protocol)</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         .ar-container { position: relative; width: 640px; height: 480px; background-color: #000; }
@@ -11,17 +11,9 @@
         #ar-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         button { font-size: 1.2rem; padding: 10px 20px; margin-top: 10px; }
     </style>
-    <!-- Import all necessary modules -->
-    <script type="module" src="./js/sensor_engine.js"></script>
-    <script type="module" src="./js/audio_engine.js"></script>
-    <script type="module" src="./js/pose_estimation.js"></script>
-    <script type="module" src="./js/target_poses.js"></script>
-    <script type="module" src="./js/protocol_library.js"></script>
-    <script type="module" src="./js/pose_matcher.js"></script>
-    <script type="module" src="./js/ar_renderer.js"></script>
 </head>
 <body>
-    <h1>Adaptive Sequencing Engine Test</h1>
+    <h1>Adaptive Sequencing Engine Test (3-Stage Protocol)</h1>
     <div class="ar-container">
         <video id="video-feed" autoplay playsinline></video>
         <canvas id="ar-canvas" width="640" height="480"></canvas>
@@ -29,7 +21,7 @@
     <button id="startEventButton">Start Session</button>
 
     <script type="module">
-        import { decisionEngine } from './js/decision_engine.js';
+        import { sessionOrchestrator } from './js/collective_event_engine.js';
 
         const uiElements = {
             buttonElement: document.getElementById('startEventButton'),
@@ -50,12 +42,9 @@
         // Event Wiring
         uiElements.buttonElement.addEventListener('click', () => {
             if (uiElements.buttonElement.textContent.includes('Start')) {
-                arRenderer.initialize(uiElements.canvasElement);
-                decisionEngine.startSession('Default', uiElements);
-                uiElements.buttonElement.textContent = 'Stop Session';
+                sessionOrchestrator.startEvent(uiElements);
             } else {
-                decisionEngine.stopSession();
-                uiElements.buttonElement.textContent = 'Start Session';
+                sessionOrchestrator.stopEvent(uiElements);
             }
         });
     </script>

@@ -1,73 +1,88 @@
 /**
- * @fileoverview Contains the logic for comparing a user's detected pose with a target pose.
- * This engine calculates the alignment of key body segments and provides feedback.
+ * @fileoverview Calculates pose adherence and movement quality scores.
+ * This engine compares a user's detected pose with a target pose, providing
+ * quantitative metrics for the main DL model.
  */
 
-console.log("Pose Matcher Engine Loaded.");
+console.log("Pose Matcher Engine (with Adherence Scores) Loaded.");
 
-// Defines the joints that make up each major body segment.
-const bodySegments = {
-    'torso':          ['left_shoulder', 'right_shoulder', 'left_hip', 'right_hip'],
-    'left_arm':       ['left_shoulder', 'left_elbow', 'left_wrist'],
-    'right_arm':      ['right_shoulder', 'right_elbow', 'right_wrist'],
-    'left_leg':       ['left_hip', 'left_knee', 'left_ankle'],
-    'right_leg':      ['right_hip', 'right_knee', 'right_ankle'],
-};
+const ALIGNMENT_THRESHOLD = 0.1; // 10% tolerance for joint distance
 
-// A simple threshold for determining if a joint is "aligned".
-// If the normalized distance between the user's joint and the target joint
-// is less than this value, it's considered a match.
-const ALIGNMENT_THRESHOLD = 0.1; // 10% of the canvas width/height
+let previousPose = null;
+let movementHistory = [];
+const MOVEMENT_HISTORY_LENGTH = 10; // Frames to average for stability
 
 /**
- * Calculates the Euclidean distance between two 2D points.
- * @param {{x: number, y: number}} p1 - The first point.
- * @param {{x: number, y: number}} p2 - The second point.
- * @returns {number} The distance between the points.
+ * Calculates a PoseAdherence_score based on how well the user's pose matches the target.
+ * @param {object} userPose - The user's detected skeleton data.
+ * @param {object} targetPose - The target skeleton data.
+ * @returns {number} A score from 0.0 to 1.0.
  */
-function getDistance(p1, p2) {
-    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+function calculatePoseAdherence(userPose, targetPose) {
+    if (!userPose || !targetPose) return 0;
+
+    let totalDistance = 0;
+    let jointCount = 0;
+
+    for (const jointName in targetPose) {
+        const userJoint = userPose[jointName];
+        const targetJoint = targetPose[jointName];
+
+        if (userJoint && userJoint.confidence > 0.5) {
+            const distance = Math.sqrt(Math.pow(userJoint.x - targetJoint.x, 2) + Math.pow(userJoint.y - targetJoint.y, 2));
+            // Inversely weight the distance: closer is better.
+            totalDistance += Math.min(distance, ALIGNMENT_THRESHOLD);
+            jointCount++;
+        }
+    }
+
+    if (jointCount === 0) return 0;
+
+    const averageDistance = totalDistance / jointCount;
+    // Normalize the score: 1.0 for perfect alignment, 0.0 at the threshold.
+    return 1.0 - (averageDistance / ALIGNMENT_THRESHOLD);
 }
 
 /**
- * Compares the user's current pose to a target pose and returns alignment feedback.
- * @param {object} userPose - The user's detected skeleton data.
- * @param {object} targetPose - The target skeleton data from the protocol library.
- * @returns {object} An object containing alignment status for each body segment (e.g., { left_arm: 'aligned' }).
+ * Calculates a MovementQuality score based on the stability of the user's pose over time.
+ * @param {object} userPose - The user's current detected skeleton data.
+ * @returns {number} A score from 0.0 to 1.0, where 1.0 is perfectly still.
  */
-function matchPoses(userPose, targetPose) {
-    const alignment = {};
-
-    if (!userPose || !targetPose) {
-        return {}; // Return empty object if data is missing
+function calculateMovementQuality(userPose) {
+    if (!userPose || !previousPose) {
+        previousPose = userPose;
+        return 1.0; // Assume perfect stability on the first frame
     }
 
-    for (const segmentName in bodySegments) {
-        const jointNames = bodySegments[segmentName];
-        let isSegmentAligned = true;
+    let totalMovement = 0;
+    let jointCount = 0;
 
-        for (const jointName of jointNames) {
-            const userJoint = userPose[jointName];
-            const targetJoint = targetPose[jointName];
+    for (const jointName in userPose) {
+        const currentJoint = userPose[jointName];
+        const prevJoint = previousPose[jointName];
 
-            // Ensure both joints are detected with sufficient confidence
-            if (!userJoint || !targetJoint || userJoint.confidence < 0.5) {
-                isSegmentAligned = false;
-                break; // Skip this joint if it's unreliable
-            }
-
-            const distance = getDistance(userJoint, targetJoint);
-            if (distance > ALIGNMENT_THRESHOLD) {
-                isSegmentAligned = false;
-                break; // One misaligned joint means the whole segment is misaligned
-            }
+        if (currentJoint && prevJoint && currentJoint.confidence > 0.5) {
+            totalMovement += Math.sqrt(Math.pow(currentJoint.x - prevJoint.x, 2) + Math.pow(currentJoint.y - prevJoint.y, 2));
+            jointCount++;
         }
-        alignment[segmentName] = isSegmentAligned ? 'aligned' : 'misaligned';
     }
 
-    return alignment;
+    previousPose = userPose;
+    if (jointCount === 0) return 1.0;
+
+    // Add current movement to history and keep it at a fixed length
+    movementHistory.push(totalMovement / jointCount);
+    if (movementHistory.length > MOVEMENT_HISTORY_LENGTH) {
+        movementHistory.shift();
+    }
+
+    const averageMovement = movementHistory.reduce((a, b) => a + b, 0) / movementHistory.length;
+    // Normalize: Assume a small amount of movement is normal. Inversely score it.
+    // The '0.05' is a magic number representing a high amount of jitter.
+    return Math.max(0, 1.0 - (averageMovement / 0.05));
 }
 
 export const poseMatcher = {
-    matchPoses,
+    calculatePoseAdherence,
+    calculateMovementQuality,
 };

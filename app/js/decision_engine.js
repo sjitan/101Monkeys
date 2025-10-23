@@ -1,118 +1,132 @@
 /**
- * @fileoverview The core bioadaptive sequencing engine.
- * This engine manages the continuous "Sense -> Evaluate -> Adapt -> Intervene" loop,
- * dynamically selecting the next best intervention based on real-time physiological feedback.
+ * @fileoverview The core bioadaptive sequencing engine for the new DL architecture.
+ * Manages the "Sense -> Evaluate -> Adapt -> Intervene" loop, using a mock GRU
+ * model to dynamically select interventions and command the generative AI guide.
  */
 
 import { ProtocolLibrary } from './protocol_library.js';
 import { targetPoses } from './target_poses.js';
 import { sensorEngine } from './sensor_engine.js';
-import { audioEngine } from './audio_engine.js';
+import { aiGuideEngine } from './ai_guide_engine.js';
 import { arRenderer } from './ar_renderer.js';
 import { poseMatcher } from './pose_matcher.js';
 import { poseEstimationEngine } from './pose_estimation.js';
 
+console.log("Adaptive Sequencing Engine (GRU Arch) Loaded.");
 
-console.log("Adaptive Sequencing Engine Loaded.");
-
-// --- Mock Pacer_Model ---
+// --- Mock On-Device DL Model (GRU with Input Attention) ---
 const Pacer_Model = {
-    predict: (current_ft, candidate_step) => {
-        if (candidate_step.pose_id.includes('restorative')) return 0.9;
-        if (candidate_step.pose_id.includes('mobilizing')) return 0.7;
-        return 0.5;
+    predict: (ft_sequence, candidate_steps, archetype) => {
+        // Mock "Input Attention": Pay more attention to certain features based on archetype
+        const attentionWeights = {
+            'Depleted': { rmssd: 1.5, pose_adherence: 1.0 },
+            'Regulator-in-Training': { seda: 1.2, rf_bracing: 1.3 },
+            'default': { rmssd: 1.0, seda: 1.0, pose_adherence: 1.0 }
+        };
+        const weights = attentionWeights[archetype] || attentionWeights.default;
+
+        // Predict a U-score for each candidate
+        return candidate_steps.map(step => {
+            let u_score = Math.random() * 0.5; // Base score
+            if (step.pose_id.includes('restorative')) u_score += 0.4;
+            if (step.pose_id.includes('mobilizing')) u_score += 0.2;
+
+            // Apply mock attention
+            const last_ft = ft_sequence[ft_sequence.length - 1];
+            if (last_ft) {
+                u_score += (last_ft.z_rmssd * (weights.rmssd || 1.0) - last_ft.seda * (weights.seda || 1.0) + last_ft.pose_adherence * (weights.pose_adherence || 1.0)) * 0.1;
+            }
+            return { step, u_score: Math.max(0, Math.min(1, u_score)) };
+        });
     }
 };
 
 let session = {
-    isActive: false,
-    timer: null,
-    animationFrameId: null,
-    currentProtocol: null,
-    currentStepIndex: -1,
-    currentTargetPose: null,
-    uiElements: null,
-    currentUserPose: null,
+    isActive: false, timer: null, animationFrameId: null,
+    archetype: 'Depleted', // Default
+    currentProtocolPlan: null, currentStepIndex: -1,
+    currentTargetPose: null, uiElements: null, currentUserPose: null,
+    ft_sequence: [], SEQUENCE_LENGTH: 10,
 };
-
-// --- Main Session Logic ---
 
 function runAdaptiveStep() {
     if (!session.isActive) return;
 
-    const latest_ft = sensorEngine.getMockFeatures();
-    const plannedNextStep = session.currentProtocol.sequence[session.currentStepIndex + 1];
+    // 1. Sense: Get latest features and add to the sequence
+    const raw_features = sensorEngine.getAllFeatures();
+    const derived_features = {
+        pose_adherence: poseMatcher.calculatePoseAdherence(session.currentUserPose, session.currentTargetPose),
+        movement_quality: poseMatcher.calculateMovementQuality(session.currentUserPose),
+    };
+    const latest_ft = { ...raw_features, ...derived_features };
+    session.ft_sequence.push(latest_ft);
+    if (session.ft_sequence.length > session.SEQUENCE_LENGTH) {
+        session.ft_sequence.shift();
+    }
 
-    // Terminate if the protocol is complete
-    if (!plannedNextStep) {
-        stopSession();
+    // 2. Evaluate: Determine candidate next steps
+    const plannedNextStep = session.currentProtocolPlan.sequence[session.currentStepIndex + 1];
+    const candidates = plannedNextStep ? [plannedNextStep] : [];
+    candidates.push(ProtocolLibrary.SafetyProtocol.sequence[0]); // Always consider a safe option
+
+    // 3. Adapt: Use the DL model to select the best step
+    if (session.ft_sequence.length < session.SEQUENCE_LENGTH) {
+        console.log(`[DecisionEngine] Collecting feature sequence... ${session.ft_sequence.length}/${session.SEQUENCE_LENGTH}`);
+        executeStep(session.currentProtocolPlan.sequence[0]); // Repeat first pose while collecting
         return;
     }
 
-    const candidates = [plannedNextStep, ProtocolLibrary.SafetyProtocol.sequence[0]];
-
-    const predictions = candidates.map(step => ({
-        step: step,
-        u_score: Pacer_Model.predict(latest_ft, step)
-    }));
+    const predictions = Pacer_Model.predict(session.ft_sequence, candidates, session.archetype);
     predictions.sort((a, b) => b.u_score - a.u_score);
+    const bestNext = predictions[0];
 
-    const bestNextStep = predictions[0].step;
-    console.log(`[DecisionEngine] Adaptive Choice: Selected '${bestNextStep.pose_id}' with score ${predictions[0].u_score.toFixed(2)}`);
+    console.log(`[DecisionEngine] Adaptive Choice: '${bestNext.step.pose_id}' (U-score: ${bestNext.u_score.toFixed(2)})`);
 
-    if (bestNextStep === plannedNextStep) {
+    if (bestNext.step === plannedNextStep) {
         session.currentStepIndex++;
     } else {
-        console.log(`[DecisionEngine] Overriding planned protocol with safety step.`);
+        console.log("[DecisionEngine] Override: Switched to safety/restorative protocol.");
     }
 
-    executeStep(bestNextStep);
+    // 4. Intervene: Execute the chosen step
+    executeStep(bestNext.step);
 }
 
 function executeStep(step) {
     const { pose_id, duration } = step;
-
-    audioEngine.play(`${pose_id}.mp3`);
     session.currentTargetPose = targetPoses[pose_id];
 
+    // Command the generative AI guide
+    aiGuideEngine.generate({ action: 'deliver_pose', pose_id });
+
+    // Schedule the next adaptive check
+    clearTimeout(session.timer);
     session.timer = setTimeout(runAdaptiveStep, duration);
 }
 
 function renderLoop() {
     if (!session.isActive) return;
-    const alignment = poseMatcher.matchPoses(session.currentUserPose, session.currentTargetPose);
+    const alignment = poseMatcher.calculatePoseAdherence(session.currentUserPose, session.currentTargetPose) > 0.7
+        ? { torso: 'aligned', left_arm: 'aligned', right_arm: 'aligned' }
+        : { torso: 'misaligned', left_arm: 'misaligned', right_arm: 'misaligned' };
     arRenderer.render(session.uiElements.videoElement, session.currentTargetPose, session.currentUserPose, alignment);
     session.animationFrameId = requestAnimationFrame(renderLoop);
 }
 
 function startSession(archetype, uiElements) {
     if (session.isActive) return;
-    console.log("[DecisionEngine] Starting Adaptive Session...");
+    console.log(`[DecisionEngine] Starting Adaptive Session for Archetype: ${archetype}`);
 
-    session = {
-        isActive: true,
-        timer: null,
-        animationFrameId: null,
-        currentProtocol: ProtocolLibrary.getProtocol(archetype),
-        currentStepIndex: -1,
-        currentTargetPose: null,
-        uiElements: uiElements,
-        currentUserPose: null,
-    };
+    session = { ...session, isActive: true, archetype, uiElements, currentProtocolPlan: ProtocolLibrary.getProtocol(archetype) };
 
     poseEstimationEngine.start(pose => { session.currentUserPose = pose; });
-
-    // Start the single, continuous render loop
     session.animationFrameId = requestAnimationFrame(renderLoop);
-
-    // Kick off the first adaptive step
-    runAdaptiveStep();
+    runAdaptiveStep(); // Kick off the loop
 }
 
 function stopSession() {
     if (!session.isActive) return;
     console.log("[DecisionEngine] Stopping Adaptive Session.");
-
     session.isActive = false;
     clearTimeout(session.timer);
     cancelAnimationFrame(session.animationFrameId);
