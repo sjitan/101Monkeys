@@ -3,23 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pacer</title>
+    <title>101Monkeys Pacer Protocol (Jules-Hardened)</title>
     <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-    <div id="pacer-container">
-        <!-- Pacer UI will be dynamically generated here -->
-    </div>
-    <script type="module" src="js/sensor_engine.js"></script>
-    <script type="module" src="js/seda_model.js"></script>
-    <script type="module" src="js/rf_model.js"></script>
+    <h1>Pacer Session Running...</h1>
+    <p>Check the browser console for detailed logs of the sequential processing and federated learning loop.</p>
+    <div id="pacer-container"></div>
+
+    <!--
+      Core Application Logic - All loaded as modules to handle imports/exports.
+      The order is important to ensure dependencies are available.
+    -->
+
+    <!-- 1. Data Stores and Libraries -->
+    <script type="module" src="js/baseline_store.js"></script>
     <script type="module" src="js/protocol_library.js"></script>
-    <script type="module" src="js/decision_engine.js"></script>
-    <script type="module" src="js/pacer_engine.js"></script>
-    <script type="module" src="js/auth.js"></script>
+
+    <!-- 2. Core Services -->
     <script type="module" src="js/federated_manager.js"></script>
-    <script type="module" src="js/dl_engine.js"></script>
-    <script type="module" src="js/cep_engine.js"></script>
+    <script type="module" src="js/sensor_engine.js"></script>
+
+    <!-- 3. Main Decision Engine -->
+    <script type="module" src="js/decision_engine.js"></script>
+
+    <!-- 4. Application Entry Point -->
     <script type="module" src="js/app.js"></script>
 </body>
 </html>

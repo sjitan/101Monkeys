@@ -1,70 +1,66 @@
-// Federated Manager: Handles anonymized communication with the backend for archetype classification and federated learning.
+// Federated Manager: Handles archetype classification and the federated learning loop.
 
-console.log("Federated Manager Loaded.");
+import { BaselineStore } from './baseline_store.js';
 
-const FederatedManager = {
-    ARCHETYPE_CLASSIFIER_URL: 'https://api.101monkeys.com/assign_cluster', // This URL will now point to our archetype classifier
+console.log("Federated Manager (with Learning Loop) Loaded.");
+
+export const FederatedManager = {
+    ARCHETYPE_CLASSIFIER_URL: 'https://api.101monkeys.com/assign_cluster',
 
     /**
      * Fetches the user's Autonomic Archetype from the backend classifier.
-     * This now sends a POST request with the user's performance metrics.
-     *
-     * @param {string} userId - The user's unique identifier.
-     * @param {number} vae_score - Volitional Autonomic Efficacy (e.g., 0.75 for 75% success).
-     * @param {number} nsf_score - Non-Local Signal Fidelity (e.g., a z-score of 1.2).
-     * @returns {Promise<string>} - The archetype tag (e.g., 'Operator').
      */
     getArchetypeAssignment: async (userId, vae_score, nsf_score) => {
-        console.log(`Fetching archetype assignment for userId: ${userId}`);
-
-        // In a real application, this makes a network request.
-        // For now, we simulate the request and the logic of the backend classifier.
-        const requestBody = {
-            userId: userId,
-            vae: vae_score,
-            nsf: nsf_score
-        };
-
-        // const response = await fetch(FederatedManager.ARCHETYPE_CLASSIFIER_URL, {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify(requestBody)
-        // });
-        // const data = await response.json();
-        // return data.archetype;
-
-        // --- Simulation of the Backend Logic (for local testing) ---
+        // Using a simulation for local testing.
         const VAE_THRESHOLD = 0.5;
         const NSF_THRESHOLD = 0.0;
-        let archetype = "Insulated";
+        if (vae_score >= VAE_THRESHOLD && nsf_score >= NSF_THRESHOLD) return "Operator";
+        if (vae_score >= VAE_THRESHOLD && nsf_score < NSF_THRESHOLD) return "Stabilizer";
+        if (vae_score < VAE_THRESHOLD && nsf_score >= NSF_THRESHOLD) return "Amplifier";
+        return "Insulated";
+    },
 
-        if (vae_score >= VAE_THRESHOLD && nsf_score >= NSF_THRESHOLD) {
-            archetype = "Operator";
-        } else if (vae_score >= VAE_THRESHOLD && nsf_score < NSF_THRESHOLD) {
-            archetype = "Stabilizer";
-        } else if (vae_score < VAE_THRESHOLD && nsf_score >= NSF_THRESHOLD) {
-            archetype = "Amplifier";
-        }
+    /**
+     * Creates the Autonomic Profile Vector (APV) from user baselines.
+     * The APV is an anonymized vector of physiological traits for server-side clustering.
+     * @param {object} userBaselines - The user's baseline physiological metrics (median/mad).
+     * @returns {object} - The anonymized Autonomic Profile Vector.
+     */
+    createAutonomicProfileVector: (userBaselines) => {
+        // This is a simplified APV. A real system might use more complex statistical features.
+        return {
+            // Example traits: Is the user vagally dominant? Are they sympathetically volatile?
+            vagal_tone_median: userBaselines.rmssd.median,
+            sympathetic_volatility_mad: userBaselines.pv_sequence.mad,
+            respiratory_coherence_mad: userBaselines.resp_var.mad
+        };
+    },
 
-        console.log(`Assigned to archetype: ${archetype}`);
-        return archetype;
+    /**
+     * Prepares the anonymized "Report" to be sent to the federated server.
+     * This report contains ONLY the mathematical model updates and the anonymized profile vector.
+     * @param {object} modelTrainingResult - Contains the outcome of the on-device training.
+     * @param {object} userBaselines - The user's baseline physiological metrics.
+     * @returns {object} - The anonymized report object.
+     */
+    prepareAnonymizedReport: (modelTrainingResult, userBaselines) => {
+        // 1. Simulate the model_delta. In a real TF.js implementation, this would be
+        //    the serialized weight changes (gradients) after a training step.
+        const model_delta = {
+            gradients: `session_${Date.now()}_gradients`, // Placeholder for actual gradient data
+            training_loss: modelTrainingResult.loss
+        };
+
+        // 2. Create the Autonomic Profile Vector.
+        const apv = FederatedManager.createAutonomicProfileVector(userBaselines);
+
+        const report = {
+            model_delta,
+            apv,
+        };
+
+        // Use JSON.stringify to ensure the full object is logged for verification.
+        console.log("Prepared Anonymized Report for Federated Server:", JSON.stringify(report, null, 2));
+        return report;
     }
 };
-
-// --- Example Usage ---
-
-async function runArchetypeExample() {
-    // Simulate user performance data after 20 Pacer and 20 CEP sessions.
-    const userId = "user_operator_1";
-    const vae = 0.8; // High VAE (80% success)
-    const nsf = 1.5; // High NSF (z-score of 1.5)
-
-    console.log(`Running example for an 'Operator' profile...`);
-    const archetype = await FederatedManager.getArchetypeAssignment(userId, vae, nsf);
-    console.log(`Final Archetype: ${archetype}`); // Expected: Operator
-
-    // The Decision Engine would then use this archetype to load the correct protocol.
-    // e.g., const protocol = ProtocolLibrary.getProtocol(archetype);
-}
-
-runArchetypeExample();

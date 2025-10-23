@@ -1,102 +1,169 @@
-# 🧠 101Monkeys — Jules-Ready Specification
+🧠 101Monkeys — The "Jules-Hardened" Complete Architecture
+A Privacy-First, Edge-Computed, Federated Coherence Platform
 
-**An On-Device, Multi-Modal, Privacy-First Bio-Pacing and Research Platform**
+1. Mission & Guiding Hypotheses
+This project has a Dual Mission:
 
----
+Clinical (The Pacer): To provide a clinically-safe, bioadaptive pacing assistant for sensitive populations (ME/CFS, Dysautonomia) to prevent Post-Exertional Malaise (PEM).
 
-## 🎯 Mission
+Research (The Network): To build a privacy-first, networked instrument to facilitate and rigorously measure the conditions for autonomic coherence.
 
-To deliver a clinically conservative, on-device pacing assistant that nudges the Autonomic Nervous System (ANS) toward coherence—measured, not imagined. We combine multimodal sensing (ocular, RF, synthetic EDA) with a rigorous, privacy-preserving machine learning architecture to provide real-time, personalized pacing for sensitive clinical populations (ME/CFS, Dysautonomia) while simultaneously creating a testbed for novel hypotheses on autonomic coherence.
+This mission is guided by two core hypotheses:
 
----
+The "Flinch" Hypothesis (Stargate/SG): We propose that psi phenomena (telepathy, presentiment) and PEM onset are preceded by a physical, measurable, and often non-conscious "autonomic flinch"—an involuntary PV (pupil) spike, sEDA (sympathetic) jolt, Thermal (vascular) shift, or RF_Bracing (sub-motor) response.
 
-## ⚙️ The Architecture: An Adaptive Cluster Network
+The "Amplify" Hypothesis (Coherence/JD): We propose that a group of individuals in a synchronized autonomic state (heart-brain coherence) can "amplify" this weak "flinch" signal, making it detectable.
 
-Our system is a hybrid, edge-first architecture that uses a network of specialized, dynamically-loaded models to provide personalized and safe pacing.
+2. ⚙️ The Architecture: An Adaptive Cluster Network
+This is a privacy-first, edge-computed architecture. All sensing and data processing happens on the user's device (the "edge").
 
-1.  **Client/Edge (PWA):** The primary application runs entirely on the user's device. It handles all real-time sensing, data processing, model inference, and user-facing protocols. It operates fully offline, ensuring privacy and resilience.
+Client (PWA): The 100% on-device app. It handles all real-time sensing, SQA filtering, internal model inference, and local IndexedDB storage.
 
-2.  **Backend (AWS Lambda):** A lightweight, stateless `Cluster Assigner` service. Its sole responsibility is to assign a user to a physiological cluster based on their anonymized **Autonomic Profile Vector (APV)**. This allows the client to download the correct, specialized `Pacer_Model` for their neurotype.
+Federated Server (fl_server): A backend that manages our Federated Clustering. It does not receive raw health data.
 
-3.  **Federated Learning:** The client periodically and anonymously contributes `model_delta` (the mathematical learnings from its on-device training) back to the federated server. This improves the cluster models over time without ever exposing raw user data.
+The Loop: The server assigns the user an anonymous APV (Autonomic Profile Vector). The client, after local training, sends only its anonymous APV and the resulting model_delta (the mathematical learning). The server uses the APV to sort this model_delta into the correct "cluster model" (e.g., Pacer_Model_Cluster_ME_CFS). The client then downloads the latest, smarter model for its specific cluster.
 
----
+The "Anonymized Report" (Privacy Fail-Safe)
+To be explicitly clear, we NEVER upload a user's raw health data.
 
-## LAYER 1: The SQA (Fidelity Filter) & Gating
+WHAT IS NEVER SENT:
 
-To solve the "Garbage In, Garbage Out" problem, all sensor data first passes through a two-stage Signal Quality Assurance (SQA) layer.
+F_t (The raw Feature Vector)
 
-1.  **Gating (Go/No-Go):** A lightweight, on-device model provides a fidelity score for each sensor stream (e.g., `ocular_fidelity_score`, `rf_fidelity_score`). If the signal quality is below a critical threshold (due to poor lighting, motion blur, etc.), the processing cycle is aborted.
+Y_actual (The raw Session Outcome)
 
-2.  **Weighting (Trust):** If the signal is usable, the fidelity score is passed as a feature to the main `Pacer_Model`. The model's Attention Layer learns to dynamically "trust" the highest-quality signal, down-weighting noisy inputs in real-time.
+Any IndexedDB health logs.
 
----
+WHAT IS SENT:
 
-## THE FULL SENSOR STACK
+model_delta (The anonymized mathematical learning).
 
-Our platform fuses data from three distinct, on-device sensor modalities.
+APV (The anonymous cluster ID).
 
-### 1. Wi-Fi/Radar (RF) Sensor
--   **Purpose:** Provides a passive, non-contact "true baseline" for respiration and heart rate, and detects the whole-body, sub-motor **"flinch" response** (`RF_Bracing`) with high sensitivity.
--   **Outputs:** `RF_RespRate`, `RF_Bracing`
+3. 📡 Layer 1: The SQA (Fidelity Filter) Layer
+This is the "fail-safe" front door to prevent "Garbage In, Garbage Out" (GIGO).
 
-### 2. The Internal Models -> The sEDA Model
--   **Purpose:** A synthetic Electrodermal Activity (sEDA) model that acts as our primary sympathetic nervous system proxy.
--   **Inputs:** `PV_sequence` (the "movie" of pupil variability over time) + `Thermal_sequence` (from the phone's thermal sensor).
--   **Output:** A single `sEDA_score` representing sympathetic arousal.
+Gating (The "Hard Stop"): A lightweight, on-device CNN runs first on all sensor streams (Camera, Mic, RF). It generates fidelity scores (ocular_fidelity, mic_fidelity, rf_fidelity). If any score is below a critical "hard gate" threshold (e.g., ocular_fidelity < 0.3 due to a dark room), the cycle is aborted, and the UI gives immediate feedback.
 
-### 3. Ocular Sensing
--   **PupilPV:** A high-frequency measure of pupil diameter variability, acting as a proxy for sympathetic arousal (the "flinch").
--   **GazeStability:** A measure of fixation variance, acting as a proxy for attentional adherence and cognitive fatigue.
+Weighting (The "Attention"): If the signal is usable, the fidelity_score is passed as a feature to the Pacer_Model. The model's Attention Layer uses this score to dynamically "trust" the highest-quality signal (e.g., if mic_fidelity is low, it "down-weights" RespVar and "up-weights" RF_RespRate).
 
----
+4. 🔬 Layer 2: The Complete Sensor & Feature Stack
+This is the full inventory of all features extracted on-device. No features from the original MVP have been lost.
 
-## THE PACER MODEL (The Core Engine)
+[HUB 1]: Front Camera (RGB / PPG / IR)
+z(RMSSD): (from PPG) The core measure of Vagal Tone (State).
 
-The core of our system is a sequential deep learning model (GRU-based) that runs on-device via TensorFlow.js.
+z(ΔRMSSD): (from PPG) The trend of Vagal Tone (Vagal Efficacy).
 
--   **Input:** A hardened, z-normalized feature vector `F_t` that fuses the multi-modal sensor data and their corresponding fidelity scores:
-    `F_t = [z(PV_sequence), ocular_fidelity, z(sEDA), z(RF_RespRate), rf_fidelity, z(RF_Bracing), z(GazeStability)]`
+PV_sequence: (from Ocular) The "movie" (sequential data) of Pupil Variability, our Locus Coeruleus/sympathetic proxy.
 
--   **Target Variable (Y_actual):** A binary success outcome, defined as:
-    `Y = 1` if `(RMSSDΔ z-score > +0.5) AND (PV_complexity z-score < +1.5)`
-    `Y = 0` otherwise.
+z(ΔPV): The trend (rate-of-change) of Pupil Variability (Sympathetic Trend).
 
--   **Output:** A predicted "Utility Score" (`U`) that informs the real-time pacing decision.
+z(GazeStability): (from Ocular) Proxy for attentional adherence.
 
----
+z(BlinkRate): (from Ocular) Proxy for cognitive fatigue/dopamine levels.
 
-## THE ANONYMIZED DATA FLOW (The "Report")
+z(MicroExpression_Trigger): (from Facial) The "emotional flinch" signal.
 
-To protect user privacy while enabling federated learning, the client **never** sends raw physiological data. The anonymous report to the federated server consists only of:
+z(Thermal_sequence): (from IR) The "vascular flinch" (peripheral vasoconstriction).
 
-1.  `model_delta`: The mathematical gradient updates representing the model's learnings.
-2.  `APV (Autonomic Profile Vector)`: An anonymized vector of baseline physiological traits used by the backend for clustering.
+[HUB 2]: Microphone
+z(RespVar): (MVP Feature) The true measure of Cardiorespiratory Coherence.
 
-The raw feature vector (`F_t`) and the actual outcome (`Y_actual`) **never leave the device.**
+z(RespRate - RF): (MVP Feature) The "Protocol Adherence" error signal (Actual Rate vs. Target Rate).
 
----
+[HUB 3]: RF (Wi-Fi/Radar)
+z(RF_RespRate): The passive respiratory baseline (when no protocol is active).
 
-## THE RESEARCH PROTOCOL (The "Test")
+z(RF_Bracing): The sub-motor, whole-body "motor flinch" signal.
 
-To rigorously test our hypotheses, we use a **Controlled Event Protocol (CEP)**, a structured, on-device experimental framework.
+[HUB 4]: User Input
+z(Fatigue): (MVP Feature) The user's subjective, self-reported fatigue (via slider).
 
-| Stage        | Duration | Purpose                                       |
-|--------------|----------|-----------------------------------------------|
-| **BASELINE**   | 3 mins   | Establish a stable, pre-intervention baseline.  |
-| **INTERVENTION** | 5 mins   | User engages with a specific pacing protocol. |
-| **RECOVERY**   | 3 mins   | Measure the autonomic recovery post-intervention. |
+[HUB 5]: Internal Models (On-Device)
+The sEDA_Model: A CNN-LSTM that runs on-device.
 
-This allows for falsifiable, scientifically valid tests, such as our **"Presentiment"** and **"Sender/Receiver"** experiments, where we analyze the time-locked autonomic responses of synchronized user groups.
+Input: PV_sequence + Thermal_sequence
 
----
+Output: z(sEDA) (A high-fidelity synthetic sympathetic arousal signal).
 
-## THE "THEORY OF IT ALL" (The "Why")
+5. 🧠 Layer 3: The Core Engine (The Pacer_Model)
+This is the main GRU/Transformer model that runs on-device.
 
-Our core mission is to test two fundamental hypotheses:
+Target Variable (Y_actual): The clinically-defined "Successful Safe Shift" (unchanged). Y = 1 if (RMSSDΔ z-score > +0.5) AND (PV_complexity z-score < +1.5) Y = 0 otherwise.
 
-1.  **The "Flinch" Hypothesis:** That a measurable, sub-motor "flinch" response (detected via `RF_Bracing` and `PupilPV`) precedes a significant drop in autonomic coherence and can be used as a predictive feature to prevent Post-Exertional Malaise (PEM).
+Input (F_t): The final, fully-fused, and hardened Feature Vector. It includes all features from the MVP and the new stack, plus their fidelity scores.
 
-2.  **The "Amplify" Hypothesis:** That a group of individuals in a coherent state (synchronized via the CEP) can measurably "amplify" their collective autonomic signal, detectable as a non-local correlation in the physiological data of a "receiver" group.
+JavaScript
 
-This platform is designed to be the definitive instrument for exploring these questions with scientific rigor and clinical safety.
+// The F_t vector fed into the Pacer_Model
+F_t = [
+  // === Fidelity Weights (from SQA Layer) ===
+  ocular_fidelity,
+  mic_fidelity,
+  rf_fidelity,
+
+  // === Vagal (Heart) (from Camera) ===
+  z(RMSSD),
+  z(ΔRMSSD),
+
+  // === Sympathetic (Arousal) ===
+  z(PV_sequence),      // (from Camera)
+  z(ΔPV),            // (from Camera)
+  z(Thermal_sequence), // (from Camera IR)
+  z(sEDA),           // (from Internal sEDA_Model)
+
+  // === Motor "Flinch" ===
+  z(RF_Bracing),              // (from RF)
+  z(MicroExpression_Trigger), // (from Camera)
+
+  // === Respiratory (Coherence & Adherence) ===
+  z(RespVar),        // (from Mic)
+  z(RespRate - RF),  // (from Mic, MVP Feature)
+  z(RF_RespRate),    // (from RF)
+
+  // === Cognitive (Fatigue & Adherence) ===
+  z(GazeStability), // (from Camera)
+  z(BlinkRate),     // (from Camera)
+  z(Fatigue)        // (from User Input, MVP Feature)
+]
+6. 🚀 Layer 4: The Coherence Facilitation Platform (The "Why")
+This is the application layer that uses the data to serve our Dual Mission.
+
+A. The Research Protocol (CEP)
+This is our falsifiable test for the "Flinch" hypothesis. We do not wait for random global events.
+
+CEP (Controlled Event Protocol): An in-app protocol that creates a controlled, time-locked T_0 event (a "startle" or "neutral" stimulus).
+
+Presentiment Test: We analyze the user's F_t before the T_0 random stimulus to search for a precognitive "flinch."
+
+Sender/Receiver Test: We time-lock a "Sender's" T_0 "Charge" event with a "Receiver's" passive F_t data to search for a non-local correlation.
+
+B. The "Autonomic Profile" Rubric (The Sorting Hat)
+This is how we classify users to provide personalized care and research. We plot them on two axes:
+
+X-Axis: VAE (Volitional Autonomic Efficacy): The "self-healer" axis. Measured by their success rate (Y_actual = 1) during Pacer sessions.
+
+Y-Axis: NSF (Non-Local Signal Fidelity): The "clairvoyant" axis. Measured by their "hit rate" (statistical F_t flinch) during CEP sessions.
+
+C. The Four Archetypes
+This rubric sorts users into four distinct, non-judgmental Archetypes:
+
+The "Stabilizer" (High VAE / Low NSF): The "super self-healer." Highly regulated but not "receptive."
+
+The "Operator" (High VAE / High NSF): The "Stargate" profile. Can both detect and control their state.
+
+The "Insulated" (Low VAE / Low NSF): The core clinical ME/CFS profile. Their nervous system is "locked."
+
+The "Amplifier" (Low VAE / High NSF): The "wide-open antenna." Highly receptive (High NSF) but no control (Low VAE).
+
+D. The "Dojo" (The Facilitation)
+This is the final step. We are facilitators, not "engineers." We provide the right conditions for emergence.
+
+The app's UI and protocols change based on the user's Archetype.
+
+"Gating Dojo" (for Amplifiers): Protocols that reward autonomic stillness and "gating" the flinch.
+
+"Activation Dojo" (for the Insulated): Protocols that train "Stress-and-Recover" loops to build autonomic flexibility.
+
+"Operator Dojo" (for Operators): The "Sender/Receiver" CEPs, which provide the feedback loop for them to "train themselves" into greater coherence.

@@ -1,111 +1,76 @@
-// Dojo Protocol Library: Defines tailored Pacer and CEP protocols for each Autonomic Archetype.
+// Dojo Protocol Library: Defines tailored Pacer protocols ("Dojos") for each Autonomic Archetype.
 
 console.log("Dojo Protocol Library Loaded.");
 
 export const ProtocolLibrary = {
-    /**
-     * Retrieves the appropriate protocol for a given archetype.
-     * @param {string} archetype - The user's archetype (e.g., 'Insulated', 'Amplifier').
-     * @returns {object} - An object containing the 'pacer' and 'cep' protocols.
-     */
     getProtocol(archetype) {
         switch (archetype) {
             case 'Insulated':
-                return this.InsulatedProtocol;
+                return this.ActivationDojo;
             case 'Amplifier':
-                return this.AmplifierProtocol;
+                return this.GatingDojo;
             case 'Operator':
-                return this.OperatorProtocol;
+                return this.OperatorDojo;
             case 'Stabilizer':
             default:
-                // Stabilizers can use a default or a more generalized protocol.
                 return this.DefaultProtocol;
         }
     },
 
-    // --- Protocol Definitions ---
-
     /**
-     * Insulated Protocol: Focuses on "Activation" to gently increase autonomic flexibility.
-     * These users may have a blunted response, so the goal is to create measurable signals.
+     * "Activation Dojo" for the Insulated Archetype.
+     * Goal: Train "Stress-and-Recover" loops to build autonomic flexibility.
      */
-    InsulatedProtocol: {
-        id: "insulated_v1",
-        pacer: {
-            name: "Stress-and-Recover",
-            description: "A gentle loop of mild cognitive stress followed by guided relaxation to encourage autonomic response.",
-            stages: [
-                { type: 'breathwork', duration: 120, target: 'resonant_frequency' },
-                { type: 'cognitive_task', duration: 60, difficulty: 'easy' },
-                { type: 'recovery_breath', duration: 120, target: 'exhale_focus' }
-            ]
-        },
-        cep: {
-            name: "Sensory Activation CEP",
-            description: "Uses mild, calibrated sensory stimuli to test for autonomic reactivity.",
-            intervention: { type: 'audio_visual', stimulus: 'calibrated_white_noise' }
-        }
+    ActivationDojo: {
+        id: "insulated_activation_v1",
+        name: "Activation Dojo: Stress & Recover",
+        description: "A protocol using mild, controlled stressors to encourage autonomic response and build flexibility.",
+        stages: [
+            { type: 'baseline', duration: 120 },
+            { type: 'cognitive_task', difficulty: 'medium', duration: 60 },
+            { type: 'guided_recovery_breath', duration: 180, target: 'exhale_focus' }
+        ]
     },
 
     /**
-     * Amplifier Protocol: Focuses on "Gating" to help users manage their high sensitivity.
-     * The goal is to reward stillness and reduce unnecessary autonomic reactions.
+     * "Gating Dojo" for the Amplifier Archetype.
+     * Goal: Reward autonomic stillness and "gating" the flinch response.
      */
-    AmplifierProtocol: {
-        id: "amplifier_v1",
-        pacer: {
-            name: "Stillness and Awareness",
-            description: "Longer periods of quiet observation and stillness to calm the system and reduce noise.",
-            stages: [
-                { type: 'body_scan', duration: 300 },
-                { type: 'stillness', duration: 300, feedback: 'reward_on_low_seda' }
-            ]
-        },
-        cep: {
-            name: "Gating Practice CEP",
-            description: "A CEP that rewards the user for maintaining a stable baseline (low RF_Bracing, low sEDA) during the intervention window.",
-            intervention: { type: 'non_local_signal' },
-            reward_condition: { metric: 'RF_Bracing', direction: 'minimize' }
-        }
+    GatingDojo: {
+        id: "amplifier_gating_v1",
+        name: "Gating Dojo: Rewarding Stillness",
+        description: "A protocol that trains the user to maintain a calm baseline by rewarding autonomic quiet.",
+        stages: [
+            { type: 'baseline', duration: 120 },
+            { type: 'stillness_practice', duration: 300, feedback_on: ['RF_Bracing', 'sEDA'], reward_condition: 'minimize' },
+            { type: 'recovery', duration: 120 }
+        ]
     },
 
     /**
-     * Operator Protocol: Focuses on "Fidelity" to maximize the clarity of their signal.
-     * These users are effective "Senders," so the goal is to refine their ability to generate coherent states.
+     * "Operator Dojo" for the Operator Archetype.
+     * Goal: Provide the feedback loop for them to "train themselves" into greater coherence.
      */
-    OperatorProtocol: {
-        id: "operator_v1",
-        pacer: {
-            name: "Coherence Maximization",
-            description: "Advanced breathwork and focus techniques to achieve and sustain high-coherence states.",
-            stages: [
-                { type: 'advanced_breathwork', duration: 600, technique: 'heart_lock_focus' }
-            ]
-        },
-        cep: {
-            name: "Sender Fidelity CEP",
-            description: "A CEP designed to help the user practice generating a clean, strong signal during the intervention window.",
-            intervention: { type: 'non_local_signal' },
-            feedback_metric: 'composite_ft_clarity_score'
-        }
+    OperatorDojo: {
+        id: "operator_coherence_v1",
+        name: "Operator Dojo: Sender/Receiver Practice",
+        description: "Utilizes the Sender/Receiver CEP to provide a direct feedback loop for training coherence.",
+        stages: [
+            { type: 'baseline', duration: 120 },
+            { type: 'cep_sender_receiver', duration: 300 },
+            { type: 'recovery_and_review', duration: 180 }
+        ]
     },
 
     /**
-     * Default/Stabilizer Protocol: A balanced protocol for general use.
+     * Default/Stabilizer Protocol: A balanced protocol for general use and for Stabilizers.
      */
     DefaultProtocol: {
-        id: "default_v1",
-        pacer: {
-            name: "Standard Pacing",
-            description: "A balanced session of resonant frequency breathing and gentle movement.",
-            stages: [
-                { type: 'resonant_frequency_breathing', duration: 600 }
-            ]
-        },
-        cep: {
-            name: "Standard CEP",
-            description: "The standard Controlled Event Protocol.",
-            intervention: { type: 'non_local_signal' }
-        }
+        id: "stabilizer_default_v1",
+        name: "Standard Pacing Protocol",
+        description: "A balanced session of resonant frequency breathing and gentle focus.",
+        stages: [
+            { type: 'resonant_frequency_breathing', duration: 600 }
+        ]
     }
 };
