@@ -1,121 +1,140 @@
 // app/js/pacer_engine.js
 
 /**
- * @file Pacer session state machine and orchestrator.
+ * @file CEP-driven pacer session state machine and orchestrator.
  *
- * This engine manages the lifecycle of a pacing session, ensuring it runs for the
- * research-validated duration (Δt) and coordinating the sensor, decision,
- * and data logging modules.
+ * This engine manages the lifecycle of a pacing session according to the
+ * stages defined in the Controlled Event Protocol (CEP). It coordinates the
+ * sensor, decision, and data logging modules, ensuring each stage is executed
+ * for its specified duration and that data is tagged appropriately.
  */
 
 import * as sensorEngine from './sensor_engine.js';
 import * as decisionEngine from './decision_engine.js';
 import * as baselineStore from './baseline_store.js';
+import { CEPEngine } from './cep_engine.js';
 
-let config = {};
 let sessionState = 'idle'; // idle, running, finished
-let sessionTimer = null;
-let sessionStartTime = null;
+let stageTimer = null;
+let currentUserId = null; // Store the user ID for the session
+
+const cepEngine = new CEPEngine();
 
 /**
- * Loads configuration from the policy file.
- */
-async function loadConfig() {
-  try {
-    const response = await fetch('../config/policy_config.json');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    config = await response.json();
-    console.log('PacerEngine: Configuration loaded.', config);
-  } catch (error) {
-    console.error('PacerEngine: Failed to load configuration:', error);
-    // Fallback to defaults if config fails to load
-    config = {
-      session_duration_s: 180,
-      safety_threshold_pv: 1.5,
-    };
-  }
-}
-
-/**
- * The main loop that runs during a session, fetching features,
- * making predictions, and checking safety gates.
+ * The main loop that runs during a session. Its behavior is determined
+ * by the current stage of the Controlled Event Protocol.
  */
 async function pacerLoop() {
-  if (sessionState !== 'running') {
-    return;
-  }
+    if (sessionState !== 'running') {
+        return;
+    }
 
-  const elapsedTime = (Date.now() - sessionStartTime) / 1000;
-  if (elapsedTime >= config.session_duration_s) {
-    await stopPacerSession();
-    return;
-  }
+    const stage = cepEngine.getCurrentStageKey();
+    if (!stage || stage === 'COMPLETE') {
+        await stopPacerSession();
+        return;
+    }
 
-  // 1. Get feature vector from the sensor engine
-  const featureVectorFt = await sensorEngine.getCurrentFeatureVector();
+    console.log(`[PacerEngine] Loop running for stage: ${stage}`);
 
-  // 2. Check hard safety gates
-  if (featureVectorFt.z_pv >= config.safety_threshold_pv) {
-    console.warn('PacerEngine: Safety gate breached! PV complexity is too high.', {z_pv: featureVectorFt.z_pv});
-    // In a real implementation, we would trigger a safety protocol (e.g., restorative pose)
-    // For now, we'll log and continue, but this is a critical hook.
-  }
+    // Get features and log them with the current stage tag.
+    const featureVector = await sensorEngine.getCurrentFeatureVector();
+    baselineStore.logRealtimeMetrics({ ...featureVector, cep_stage: stage });
 
-  // 3. Get the best protocol from the decision engine
-  const decision = await decisionEngine.getAdaptiveProtocol();
-  console.log('PacerEngine: Decision received:', decision);
+    // The decision engine is ONLY active during the INTERVENTION stage.
+    if (stage === 'INTERVENTION') {
+        // Pass the userId to the decision engine for federated model selection.
+        const decision = await decisionEngine.getAdaptiveProtocol(currentUserId);
+        console.log('[PacerEngine] Adaptive decision:', decision);
+        // (Future) Here, the UI would be updated with the chosen protocol.
+        // ui.updateProtocol(decision);
+    }
 
-  // 4. (Future) Use the utility score to select and display a protocol/cue.
-  // displayProtocol(utilityU);
+    // Continue the loop
+    setTimeout(pacerLoop, 1000); // Run the loop every second.
+}
 
-  // 5. Schedule the next loop iteration.
-  setTimeout(pacerLoop, 1000); // Run the loop every second.
+/**
+ * Transitions to the next CEP stage and sets a timer for its duration.
+ */
+async function advanceToNextStage() {
+    cepEngine.nextStage();
+    const stage = cepEngine.getCurrentStageKey();
+
+    if (!stage || stage === 'COMPLETE') {
+        await stopPacerSession();
+        return;
+    }
+
+    const duration = cepEngine.getCurrentStageDuration();
+    const instructions = cepEngine.getCurrentStageInstructions();
+
+    console.log(`[PacerEngine] Entering stage: ${stage} for ${duration} seconds.`);
+    console.log(`[PacerEngine] Instructions: ${instructions}`);
+    // (Future) Update UI with new stage instructions
+    // ui.showStageInstructions(instructions);
+
+    // Set a timer to automatically advance to the next stage.
+    if (duration > 0) {
+        stageTimer = setTimeout(advanceToNextStage, duration * 1000);
+    }
 }
 
 
 /**
- * Starts a new pacer session.
+ * Starts a new pacer session, driven by the CEP.
+ * @param {string} userId - The ID of the user starting the session.
  */
-export async function startPacerSession() {
-  if (sessionState === 'running') {
-    console.warn('PacerEngine: Session already in progress.');
-    return;
-  }
+export async function startPacerSession(userId) {
+    if (sessionState === 'running') {
+        console.warn('[PacerEngine] Session already in progress.');
+        return;
+    }
 
-  await loadConfig(); // Ensure config is loaded
-  await sensorEngine.startSensing(); // Start collecting data
+    console.log('[PacerEngine] Initializing new session...');
+    currentUserId = userId;
 
-  sessionState = 'running';
-  sessionStartTime = Date.now();
-  console.log(`PacerEngine: Session started. Duration: ${config.session_duration_s} seconds.`);
+    // Initialize all engines
+    await cepEngine.initialize();
+    await sensorEngine.startSensing();
 
-  pacerLoop();
+    sessionState = 'running';
+
+    // Start the protocol flow by setting the initial stage.
+    const initialStage = cepEngine.getCurrentStageKey();
+    const duration = cepEngine.getCurrentStageDuration();
+    const instructions = cepEngine.getCurrentStageInstructions();
+
+    console.log(`[PacerEngine] Starting CEP. Initial stage: ${initialStage} for ${duration} seconds.`);
+    console.log(`[PacerEngine] Instructions: ${instructions}`);
+    // ui.showStageInstructions(instructions);
+
+    if (duration > 0) {
+        stageTimer = setTimeout(advanceToNextStage, duration * 1000);
+    }
+
+    pacerLoop();
 }
 
 /**
  * Stops the current pacer session and logs the final outcome.
  */
 export async function stopPacerSession() {
-  if (sessionState !== 'running') {
-    return;
-  }
+    if (sessionState !== 'running') {
+        return;
+    }
 
-  sessionState = 'finished';
-  if (sessionTimer) {
-    clearTimeout(sessionTimer);
-    sessionTimer = null;
-  }
+    sessionState = 'finished';
+    if (stageTimer) {
+        clearTimeout(stageTimer);
+        stageTimer = null;
+    }
 
-  console.log('PacerEngine: Session finished. Stopping sensors and logging outcome.');
-  sensorEngine.stopSensing();
+    console.log('[PacerEngine] Session finished. Stopping sensors and logging outcome.');
+    sensorEngine.stopSensing();
 
-  // Log the final outcome (Y_actual) for clinical validation.
-  await baselineStore.logSessionOutcome();
+    // Log the final outcome (Y_actual) for clinical validation.
+    await baselineStore.logSessionOutcome();
 
-  console.log('PacerEngine: Session complete.');
+    console.log('[PacerEngine] Session complete.');
 }
-
-// Initialize on load
-loadConfig();

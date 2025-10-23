@@ -14,6 +14,8 @@ import { getConfig } from './config_loader.js';
 
 let protocolLibrary = [];
 let config = {};
+const predictionCache = new Map();
+const CACHE_TTL_MS = 5000; // Cache predictions for 5 seconds
 
 /**
  * Loads configuration and protocol library from JSON files.
@@ -24,6 +26,7 @@ async function loadDependencies() {
     }
     if (protocolLibrary.length === 0) {
         try {
+            // NOTE: Assuming this file exists based on original implementation.
             const response = await fetch('../config/yoga_protocol_library.json');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             protocolLibrary = await response.json();
@@ -34,18 +37,15 @@ async function loadDependencies() {
     }
 }
 
-
 /**
  * Selects the best adaptive protocol using the DL pipeline.
+ * @param {string} userId The ID of the current user, required for federated model selection.
  * @returns {Promise<object>} A promise that resolves with the decision object.
  */
-export const getAdaptiveProtocol = async () => {
+export const getAdaptiveProtocol = async (userId) => {
     await loadDependencies();
 
     const featureVector = await getCurrentFeatureVector();
-
-    // In a future version, we would filter protocols based on user capacity.
-    // For now, we consider all protocols as candidates.
     const candidateProtocols = protocolLibrary;
 
     if (!candidateProtocols || candidateProtocols.length === 0) {
@@ -56,13 +56,35 @@ export const getAdaptiveProtocol = async () => {
     let bestProtocol = null;
     let maxU = -Infinity;
 
-    // For each candidate, get a utility prediction from the DL model.
-    for (const protocol of candidateProtocols) {
-        // The current feature vector represents the user's state. The model
-        // predicts the utility of *any* intervention given this state.
-        // A more advanced model would take protocol features as input as well.
-        const U = await predictUtility(featureVector);
+    // Use Promise.all to run predictions in parallel, improving performance.
+    const predictions = await Promise.all(candidateProtocols.map(async (protocol) => {
+        const combinedFeatureVector = {
+            ...featureVector,
+            protocolEffort: protocol.effortScore || 0
+        };
 
+        // **FIX:** Implement memoization to avoid redundant predictions.
+        const cacheKey = JSON.stringify(combinedFeatureVector);
+        const cached = predictionCache.get(cacheKey);
+        const now = Date.now();
+
+        if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+            return { protocol, U: cached.U };
+        }
+
+        const U = await predictUtility(combinedFeatureVector, userId);
+        predictionCache.set(cacheKey, { U, timestamp: now });
+        return { protocol, U };
+    }));
+
+    // Clean up expired cache entries periodically
+    for (const [key, value] of predictionCache.entries()) {
+        if (Date.now() - value.timestamp > CACHE_TTL_MS) {
+            predictionCache.delete(key);
+        }
+    }
+
+    for (const { protocol, U } of predictions) {
         if (U > maxU) {
             maxU = U;
             bestProtocol = protocol;
@@ -90,12 +112,8 @@ export const getAdaptiveProtocol = async () => {
 function getRestorativeProtocol(reason = 'default') {
     const restorativeProtocol = protocolLibrary.find(p => p.protocolId === "CHAIR_SAVASANA_NECK_SUPPORT");
     if (restorativeProtocol) {
-        return {
-            ...restorativeProtocol,
-            score: { U: 0, reason }
-        };
+        return { ...restorativeProtocol, score: { U: 0, reason } };
     }
-    // Fallback if the library is empty or the specific protocol is missing
     return {
         protocolId: "CHAIR_SAVASANA_NECK_SUPPORT",
         breath: { rr: 5.5, ie: 1.8 },

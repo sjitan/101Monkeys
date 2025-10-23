@@ -1,0 +1,27 @@
+{
+    "protocolName": "Standard Controlled Event Protocol",
+    "version": "1.0.0",
+    "stages": {
+        "BASELINE": {
+            "duration_seconds": 180,
+            "instruction": "For the next 3 minutes, please sit comfortably and breathe normally. This will establish your baseline.",
+            "next_stage": "INTERVENTION"
+        },
+        "INTERVENTION": {
+            "duration_seconds": 300,
+            "instruction": "The intervention will now begin. Please follow the on-screen pacer and breathing guide for the next 5 minutes.",
+            "next_stage": "RECOVERY"
+        },
+        "RECOVERY": {
+            "duration_seconds": 180,
+            "instruction": "The intervention is complete. Please rest and breathe normally for the next 3 minutes while we measure your recovery.",
+            "next_stage": "COMPLETE"
+        },
+        "COMPLETE": {
+            "duration_seconds": 0,
+            "instruction": "The protocol is complete. Thank you for your participation. Results will be processed shortly.",
+            "next_stage": null
+        }
+    },
+    "initial_stage": "BASELINE"
+}
