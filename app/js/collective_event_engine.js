@@ -1,138 +1,147 @@
 /**
  * @fileoverview Manages the state and flow of the 15-minute Collective Resonance Event.
- * This module orchestrates the three main stages of the event:
- * 1. Individualized Triage & Warm-Up (5 mins)
- * 2. Group Sync & Coherence (5 mins)
- * 3. Individualized Cool-Down & Stabilization (5 mins)
+ * This engine orchestrates the three main stages of the event:
+ * 1. Individualized Triage & Warm-Up (Audio Only)
+ * 2. Group Sync & Coherence (Audio + AR Visuals)
+ * 3. Individualized Cool-Down & Stabilization (Audio Only)
  */
 
 import { decisionEngine } from './decision_engine.js';
 import { audioEngine } from './audio_engine.js';
-import { sensorEngine } from './sensor_engine.js';
+import { ProtocolLibrary } from './protocol_library.js';
+import { poseEstimationEngine } from './pose_estimation.js';
+import { poseMatcher } from './pose_matcher.js';
+import { arRenderer } from './ar_renderer.js';
 
-// Constants for event timing (in milliseconds for setTimeout)
-// Using shorter durations for easier testing.
-const WARMUP_DURATION = 5 * 1000; // 5 seconds for testing
-const GROUP_SYNC_DURATION = 5 * 1000; // 5 seconds for testing
-const COOLDOWN_DURATION = 5 * 1000; // 5 seconds for testing
-// const WARMUP_DURATION = 5 * 60 * 1000; // 5 minutes
-// const GROUP_SYNC_DURATION = 5 * 60 * 1000; // 5 minutes
-// const COOLDOWN_DURATION = 5 * 60 * 1000; // 5 minutes
+console.log("Collective Event Engine (3-Stage AR) Loaded.");
 
-let eventState = {
+// Use shorter durations for easier testing.
+const WARMUP_DURATION = 7 * 1000;   // 7 seconds for testing
+const GROUP_SYNC_DURATION = 15 * 1000; // 15 seconds for testing (duration of the AR protocol)
+const COOLDOWN_DURATION = 5 * 1000;  // 5 seconds for testing
+
+let state = {
     stage: 'idle',
     timer: null,
+    protocol: null,
+    startTime: 0,
+    currentUserPose: null,
+    currentTargetPose: null,
+    lastAlignment: {},
+    animationFrameId: null,
+    uiElements: null,
 };
 
-/**
- * Logs the current stage of the event.
- * @param {string} message - The message to log.
- */
 function logStage(message) {
-    console.log(`%c[CollectiveEventEngine] ${message}`, 'font-weight: bold; color: blue;');
+    console.log(`%c[EventEngine] ${message}`, 'font-weight: bold; color: blue;');
+    if (state.uiElements && state.uiElements.statusElement) {
+        state.uiElements.statusElement.textContent = `Status: ${message}`;
+    }
 }
 
-/**
- * Runs Stage 1: Individualized Triage & Warm-Up.
- * This stage determines the user's current state and plays a tailored warm-up protocol.
- */
+// --- AR Render Loop ---
+function renderLoop() {
+    if (state.stage !== 'group_sync') return; // Only render during the AR stage
+
+    const elapsedTime = Date.now() - state.startTime;
+    const { poses } = state.protocol;
+    let currentTarget = state.currentTargetPose;
+    for (const pose of poses) {
+        if (elapsedTime >= pose.timestamp) {
+            currentTarget = pose;
+        }
+    }
+    if (state.currentTargetPose !== currentTarget) {
+        state.currentTargetPose = currentTarget;
+        logStage(`Group Sync - New Pose: ${currentTarget.name}`);
+    }
+
+    state.lastAlignment = poseMatcher.matchPoses(state.currentUserPose, currentTarget?.pose);
+    arRenderer.render(state.uiElements.videoElement, currentTarget?.pose, state.currentUserPose, state.lastAlignment);
+
+    state.animationFrameId = requestAnimationFrame(renderLoop);
+}
+
+
+// --- Event Stages ---
 function runStage1_WarmUp() {
-    logStage('Stage 1: Individualized Triage & Warm-Up STARTING');
-    eventState.stage = 'warmup';
+    logStage('Stage 1: Individualized Warm-Up');
+    state.stage = 'warmup';
 
-    // 1. Run the Fast Triage to get an immediate decision.
     const triageDecision = decisionEngine.runFastTriage();
+    audioEngine.play(triageDecision.audioProtocol);
 
-    // 2. Command the audio engine to play the selected protocol.
-    if (triageDecision && triageDecision.audioProtocol) {
-        audioEngine.play(triageDecision.audioProtocol);
-    } else {
-        console.error('[CollectiveEventEngine] Triage failed, cannot play warm-up audio.');
-        // In a real app, we might play a default "safe" protocol here.
-    }
-
-    // 3. Set a timer to transition to the next stage.
-    eventState.timer = setTimeout(runStage2_GroupSync, WARMUP_DURATION);
+    state.timer = setTimeout(runStage2_GroupSync, WARMUP_DURATION);
 }
 
-/**
- * Runs Stage 2: Group Sync & Coherence.
- * This stage plays a synchronized audio file for all participants and increases sensor sensitivity.
- */
 function runStage2_GroupSync() {
-    logStage('Stage 2: Group Sync & Coherence STARTING');
-    eventState.stage = 'group_sync';
+    logStage('Stage 2: Group Sync & Coherence (AR Active)');
+    state.stage = 'group_sync';
+    state.protocol = ProtocolLibrary.getProtocol('Default'); // The AR-enabled protocol
+    state.startTime = Date.now(); // Reset timer for the protocol's timestamps
 
-    // 1. Simulate receiving a "START" packet from a time-sync service.
-    logStage('Time-Sync "START" packet received.');
-
-    // 2. Command the audio engine to play the synchronized group protocol.
     audioEngine.play('dojo_group/aligned_chair_yoga_flow_01.mp3');
+    poseEstimationEngine.start(pose => { state.currentUserPose = pose; });
 
-    // 3. Set the sensor engine to maximum sensitivity for analysis.
-    // In a real app, this might increase sampling rates or enable more sensors.
-    sensorEngine.setSensitivity('high'); // Assuming sensorEngine has this method.
-    logStage('Sensor sensitivity set to HIGH for coherence analysis.');
+    state.animationFrameId = requestAnimationFrame(renderLoop);
 
-    // 4. Set a timer to transition to the next stage.
-    eventState.timer = setTimeout(runStage3_Cooldown, GROUP_SYNC_DURATION);
+    state.timer = setTimeout(runStage3_Cooldown, GROUP_SYNC_DURATION);
 }
 
-/**
- * Runs Stage 3: Individualized Cool-Down & Stabilization.
- * This stage re-triages the user and plays a calming, individualized cool-down protocol.
- */
 function runStage3_Cooldown() {
-    logStage('Stage 3: Individualized Cool-Down & Stabilization STARTING');
-    eventState.stage = 'cooldown';
+    logStage('Stage 3: Individualized Cool-Down');
+    state.stage = 'cooldown';
 
-    // 1. Reset sensor sensitivity to normal.
-    sensorEngine.setSensitivity('normal');
-    logStage('Sensor sensitivity reset to NORMAL.');
+    // Clean up AR resources
+    cancelAnimationFrame(state.animationFrameId);
+    poseEstimationEngine.stop();
+    const { canvasElement } = state.uiElements;
+    const ctx = canvasElement.getContext('2d');
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-    // 2. Run the Fast Triage again to assess the user's post-session state.
-    // The logic inside runFastTriage might be different for a cool-down,
-    // but for now, we'll reuse it.
     const triageDecision = decisionEngine.runFastTriage();
-
-    // 3. Command the audio engine to play an appropriate cool-down protocol.
-    // We will select a specific cool-down file based on the archetype.
-    let cooldownAudio;
-    if (triageDecision && triageDecision.userArchetype === 'Amplifier') {
-        cooldownAudio = 'dojo_amplifier/cooldown_stabilize_01.mp3';
-    } else {
-        // Default or Insulated-specific cooldown
-        cooldownAudio = 'dojo_amplifier/cooldown_stabilize_01.mp3'; // Using amplifier's for now
-    }
+    // In a real app, we'd have specific cool-down audio. Reusing warm-up for now.
+    const cooldownAudio = triageDecision.userArchetype === 'Amplifier'
+        ? 'dojo_amplifier/cooldown_stabilize_01.mp3'
+        : triageDecision.audioProtocol;
     audioEngine.play(cooldownAudio);
 
-
-    // 4. Set a timer for the end of the event.
-    eventState.timer = setTimeout(endEvent, COOLDOWN_DURATION);
+    state.timer = setTimeout(endEvent, COOLDOWN_DURATION);
 }
 
-/**
- * Ends the event and cleans up.
- */
 function endEvent() {
-    logStage('Event COMPLETE. Cleaning up.');
-    eventState.stage = 'idle';
-    clearTimeout(eventState.timer);
-    eventState.timer = null;
+    logStage('Event Complete');
+    state.stage = 'idle';
+    clearTimeout(state.timer);
+
+    if (state.uiElements) {
+        state.uiElements.buttonElement.textContent = 'Start AR Session';
+    }
 }
 
-/**
- * Starts the Collective Resonance Event.
- */
-function startEvent() {
-    if (eventState.stage !== 'idle') {
-        console.warn('[CollectiveEventEngine] Event is already running.');
-        return;
-    }
-    logStage('Collective Resonance Event Initializing...');
+// --- Public API ---
+function startEvent(uiElements) {
+    if (state.stage !== 'idle') return;
+
+    // Correct order: Set UI elements first, then log.
+    state.uiElements = uiElements;
+    logStage("Event Initializing...");
+
+    arRenderer.initialize(uiElements.canvasElement);
+
     runStage1_WarmUp();
+}
+
+function stopEvent() {
+    if (state.stage === 'idle') return;
+    logStage('Event Manually Stopped');
+    clearTimeout(state.timer);
+    cancelAnimationFrame(state.animationFrameId);
+    poseEstimationEngine.stop();
+    endEvent();
 }
 
 export const collectiveEventEngine = {
     startEvent,
+    stopEvent,
 };

@@ -133,13 +133,20 @@ F_t = [
   z(Fatigue)        // (from User Input, MVP Feature)
 ]
 ```
-### Layer 6: The Coherence Facilitation Platform (The "Dojo")
+### Layer 6: The Coherence Facilitation Platform (The Product)
 This is the "Audio-First" application layer that serves our Dual Mission.
 
-*   **A. The "Dojo Audio Engine" (`app/js/audio_engine.js`)**:
-    *   This is the user-facing product. It is not a dashboard.
-    *   It's an adaptive audio player containing libraries of "nice voice, almost meditative" guided chair yoga and breathing protocols.
-    *   The `decision_engine` (our "Triage Component") analyzes the user's Archetype + real-time `F_t` and plays the exact audio protocol their body needs.
+*   **A. The "Audio-Visual" Engine (`app/js/audio_engine.js` + UI Layer + `ar_renderer.js`):**
+    *   This is the **user-facing product**. It delivers **synchronized audio and visual guidance**. It is *not* a dashboard.
+    *   **Primary Modality (Audio):** An adaptive audio player containing libraries of "nice voice, almost meditative" guided Chair Yoga + Breathing protocols. It plays the `Selected_Protocol` chosen by the `decision_engine`. The user primarily listens to this guidance.
+    *   **Complementary Modality (Visual AR Feedback - MVP):**
+        *   **Purpose:** To provide *glanceable, intuitive, visual confirmation* that the user's body position aligns with the target pose instructed by the audio guide.
+        *   **Interface:** The UI displays the live front camera feed with an **Augmented Reality (AR) overlay** rendered on top via `<canvas>`.
+        *   **Guidance:**
+            1.  A subtle **target pose "ghost"** (static grey skeleton) shows the ideal alignment for the *current* audio instruction.
+            2.  The user's **own detected pose skeleton** (derived from on-device Pose Estimation) is overlaid in real-time. **Uncertain parts (low confidence score) are not drawn or are faded** to avoid misleading feedback.
+            3.  **Real-Time Alignment Feedback:** The `pose_matcher.js` compares the user's main body segments (arms, legs, torso) to the target. The `ar_renderer.js` provides immediate, simple **color-coding** on the *user's* skeleton – correctly aligned segments glow **green**, misaligned segments glow **red**.
+        *   **Low Cognitive Load:** The AR display is minimalist and designed for **quick glances only**. The user listens to the audio and uses the visual overlay for brief self-correction. Audio remains the primary focus.
 *   **B. The "Dojos" (The Facilitation)**:
     *   We are facilitators, not "engineers." We provide the right conditions for emergence.
     *   The audio protocols are tailored to the user's Archetype.
