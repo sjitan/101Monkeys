@@ -161,6 +161,7 @@ The strategy for this platform is built on extensive market and user research. T
 
 *   `./docs/PMR_Market_Validation.md`: (The first "Lit Review"). This document validates the $460M+ market for a PEM-prevention tool for ME/CFS and Dysautonomia and confirms our core user personas.
 *   `./docs/PMR_Human_Centered_Critique.md`: (The "Revised" Lit Review). This critical analysis introduces the real user problem: the "lost self," grief, and isolation. It provides the "why" for our pivot away from a "cold calculator" and toward an "empathetic companion."
+*   **`./docs/THEORETICAL_FRAMEWORK_DETAILED.md`**: **(NEW)** This internal document provides the **detailed scientific and theoretical background** (Vagus Nerve, Stargate/Psi, JD/Coherence, Kundalini) that informs our sensor choices, protocols, and research hypotheses. **This provides the deep context for *why* the platform is designed this way.**
 
 ## 6. 🚀 Project Status
 *   **Phase**: 1.0 (MVP)
