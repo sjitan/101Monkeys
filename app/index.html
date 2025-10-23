@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>101Monkeys Pacer Protocol</title>
+    <link rel="stylesheet" href="css/app.css">
+    <!-- Web App Manifest -->
+    <!-- <link rel="manifest" href="manifest.json"> -->
+</head>
+<body>
+    <h1>101Monkeys Pacer Protocol</h1>
+    <p>Loading application...</p>
+    <p>Open the browser console to see the engine logs.</p>
+
+    <button onclick="pacerEngine.startPacerSession()">Start Pacer Session</button>
+    <button onclick="pacerEngine.stopPacerSession()">Stop Pacer Session</button>
+
+
+    <script type="module" src="js/main.js"></script>
+    <script type="module">
+        import * as pacerEngine from './js/pacer_engine.js';
+        window.pacerEngine = pacerEngine;
+    </script>
+</body>
+</html>

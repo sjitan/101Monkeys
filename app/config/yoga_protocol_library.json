@@ -135,7 +135,7 @@
     "rmssdDeltaSeed": 0.4
   },
   {
-    "protocolId": "CHAIR_WARRIOR_II_RIGHT",
+    "protocolId": "CHAIR_WARRIER_II_RIGHT",
     "name": "Chair Warrior II (Right)",
     "effort": 3,
     "cueJson": { "steps": ["Extend arms, gaze over right fingertips..."] },

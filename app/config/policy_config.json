@@ -1,0 +1,14 @@
+{
+  "efficacy_threshold_rmssd": 0.5,
+  "safety_threshold_pv": 1.5,
+  "session_duration_s": 180,
+  "feature_vector_keys": [
+    "z_rmssd",
+    "z_delta_rmssd",
+    "z_pv",
+    "z_delta_pv",
+    "z_resp_var",
+    "z_resp_rate_error",
+    "z_fatigue"
+  ]
+}
