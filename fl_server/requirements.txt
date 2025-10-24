@@ -1,0 +1,6 @@
+# This file will list the Python dependencies for the project.
+fastapi
+uvicorn
+python-dotenv
+pytest
+httpx

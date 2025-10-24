@@ -235,18 +235,15 @@ To set up the development environment, clone the repository and install the depe
 git clone https://github.com/101st-monkey-labs/pacer-app.git
 cd pacer-app
 
-# 2. Set up the backend server
-cd fl_server
-# (Assuming a pipenv or similar setup)
-pipenv install
-pipenv shell
+# 2. Install backend dependencies
+pip install -r fl_server/requirements.txt
 
-# 3. Set up the frontend app
-# (No frontend dependencies to install)
+# 3. (Optional) Install simulation dependencies
+pip install -r sim/requirements.txt
 
-# 4. Install Playwright for frontend verification
-pip install playwright
-playwright install
+# 4. (Optional) Install frontend verification dependencies
+pip install -r frontend_verification/requirements.txt
+playwright install # Installs necessary browser drivers
 ```
 
 ## 6. Configuration
@@ -261,20 +258,32 @@ Modify the `.env` file with your specific settings (e.g., API keys, database URL
 
 ## 7. Usage
 
-1.  **Start the Backend Server**:
+1.  **Start the Backend `fl_server`**:
     ```bash
-    # In the fl_server directory
-    python3 main.py
+    python3 fl_server/main.py
     ```
-2.  **Start the Frontend App**:
-    The frontend is a PWA that can be served from a simple local web server.
+    The API will be available at [http://localhost:8000](http://localhost:8000).
+
+2.  **Start the Frontend PWA**:
     ```bash
-    # In the app directory
+    # Navigate to the app directory
+    cd app
+    # Start a simple Python web server
     python3 -m http.server 8080
     ```
-3.  **Access the App**:
-    *   Web App: [http://localhost:8080/pacer.html](http://localhost:8080/pacer.html)
-    *   API Docs: [http://localhost:8000/docs](http://localhost:8000/docs) (if the `fl_server` uses an OpenAPI-compatible framework like FastAPI)
+    The PWA will be accessible at [http://localhost:8080/pacer.html](http://localhost:8080/pacer.html).
+
+3.  **Run the Simulation Harness (in a new terminal)**:
+    ```bash
+    # Make sure the fl_server is running first
+    python3 sim/harness.py
+    ```
+
+4.  **Run Frontend Verification (in a new terminal)**:
+    ```bash
+    # Make sure the frontend PWA is running first
+    python3 frontend_verification/verify.py
+    ```
 
 ## 8. API Reference (fl_server)
 
